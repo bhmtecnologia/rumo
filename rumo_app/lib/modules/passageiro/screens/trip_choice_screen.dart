@@ -5,8 +5,9 @@ import 'package:rumo_app/core/models/estimate.dart';
 import 'package:rumo_app/core/models/ride.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/widgets/rumo_map.dart';
+import 'package:rumo_app/modules/passageiro/screens/waiting_for_driver_screen.dart';
 
-class TripChoiceScreen extends StatelessWidget {
+class TripChoiceScreen extends StatefulWidget {
   final Estimate estimate;
   final String pickupAddress;
   final String destinationAddress;
@@ -22,24 +23,42 @@ class TripChoiceScreen extends StatelessWidget {
     this.destinationCoords,
   });
 
+  @override
+  State<TripChoiceScreen> createState() => _TripChoiceScreenState();
+}
+
+class _TripChoiceScreenState extends State<TripChoiceScreen> {
+  bool _requesting = false;
+
   Future<void> _requestRide(BuildContext context) async {
+    if (_requesting) return;
+    setState(() => _requesting = true);
     final api = ApiService();
     try {
       final ride = await api.createRide(
-        pickupAddress: pickupAddress,
-        destinationAddress: destinationAddress,
-        estimatedPriceCents: estimate.estimatedPriceCents,
-        estimatedDistanceKm: estimate.distanceKm,
-        estimatedDurationMin: estimate.durationMin,
-        pickupLat: pickupCoords?.latitude,
-        pickupLng: pickupCoords?.longitude,
-        destinationLat: destinationCoords?.latitude,
-        destinationLng: destinationCoords?.longitude,
+        pickupAddress: widget.pickupAddress,
+        destinationAddress: widget.destinationAddress,
+        estimatedPriceCents: widget.estimate.estimatedPriceCents,
+        estimatedDistanceKm: widget.estimate.distanceKm,
+        estimatedDurationMin: widget.estimate.durationMin,
+        pickupLat: widget.pickupCoords?.latitude,
+        pickupLng: widget.pickupCoords?.longitude,
+        destinationLat: widget.destinationCoords?.latitude,
+        destinationLng: widget.destinationCoords?.longitude,
       );
       if (!context.mounted) return;
-      _showSuccess(context, ride);
+      setState(() => _requesting = false);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => WaitingForDriverScreen(
+            ride: ride,
+            formattedPrice: widget.estimate.formattedPrice,
+          ),
+        ),
+      );
     } catch (e) {
       if (!context.mounted) return;
+      setState(() => _requesting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
@@ -47,31 +66,6 @@ class TripChoiceScreen extends StatelessWidget {
         ),
       );
     }
-  }
-
-  void _showSuccess(BuildContext context, Ride ride) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Corrida solicitada'),
-        content: Text(
-          'ID: ${ride.id}\nStatus: ${ride.status}\n\n${ride.formattedPrice ?? estimate.formattedPrice}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-            child: const Text('Voltar ao início'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -86,8 +80,8 @@ class TripChoiceScreen extends StatelessWidget {
                 return Stack(
                   children: [
                     RumoMap(
-                      pickup: pickupCoords,
-                      destination: destinationCoords,
+                      pickup: widget.pickupCoords,
+                      destination: widget.destinationCoords,
                       height: constraints.maxHeight,
                       fitBounds: true,
                     ),
@@ -142,7 +136,7 @@ class TripChoiceScreen extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          pickupAddress,
+                          widget.pickupAddress,
                           style: TextStyle(fontSize: 13, color: Colors.grey[300]),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -158,7 +152,7 @@ class TripChoiceScreen extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          destinationAddress,
+                          widget.destinationAddress,
                           style: TextStyle(fontSize: 13, color: Colors.grey[300]),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -177,11 +171,11 @@ class TripChoiceScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '${estimate.durationMin} min',
+                            '${widget.estimate.durationMin} min',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           Text(
-                            estimate.formattedPrice,
+                            widget.estimate.formattedPrice,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
@@ -193,11 +187,17 @@ class TripChoiceScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: () => _requestRide(context),
+                    onPressed: _requesting ? null : () => _requestRide(context),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: const Text('Escolha Rumo'),
+                    child: _requesting
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Escolha Rumo'),
                   ),
                 ],
               ),
