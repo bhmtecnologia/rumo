@@ -47,3 +47,32 @@ Hoje só a **pasta web** (build do Flutter) está no Render, como **Static Site*
 - **Web Service (backend):** ainda precisa ser criado no Render; depois, configurar env vars, CORS e rebuild do front com a URL da API.
 
 A aplicação Flutter web usa a URL da API em **`rumo_app/lib/core/config.dart`**: em build de **release** (`flutter build web`) já aponta para `https://rumo-f09a.onrender.com/api`. Em desenvolvimento (`flutter run`) continua usando `http://localhost:3001/api`.
+
+---
+
+## Erro de login no Render: ENETUNREACH / conexão com o banco
+
+Se o login falha no Render com algo como:
+
+```text
+Login error: Error: connect ENETUNREACH ... 5432
+```
+
+é porque a **conexão direta** do Supabase (porta **5432**) usa **IPv6**, e o ambiente do Render não consegue alcançar (ENETUNREACH).
+
+**Solução:** usar o **Connection pooler** do Supabase em modo **Transaction** (porta **6543**), que funciona em IPv4.
+
+1. No **Supabase**: Dashboard do projeto → **Project Settings** → **Database** → em **Connection string** escolha **Transaction** (ou “Use connection pooling”) e copie a URL. Ela deve terminar em **`:6543/postgres`** (e não `:5432/postgres`).
+2. No **Render**: no seu Web Service (rumo-f09a) → **Environment** → defina **`DATABASE_URL`** com a URL do pooler.
+
+   **Opção mais simples:** se hoje sua `DATABASE_URL` no Render é algo como  
+   `postgresql://postgres:XXX@db.xxxxx.supabase.co:5432/postgres`,  
+   altere só a porta **5432** para **6543**:  
+   `postgresql://postgres:XXX@db.xxxxx.supabase.co:6543/postgres`  
+   (mesmo host, mesma senha, só trocar `5432` → `6543`).
+
+   **Ou** use a URL de “Transaction pooler” que o Supabase mostra em **Connect** → **Transaction** (pode usar host tipo `aws-0-XX.pooler.supabase.com:6543`).
+
+3. Salve as variáveis e faça **Redeploy** do serviço no Render.
+
+Depois disso, a API no Render passa a conectar no banco via pooler e o login deve funcionar.
