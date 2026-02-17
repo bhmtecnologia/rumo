@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../load-env.js';
 import pool from './pool.js';
 
 const SQL = `
@@ -35,6 +35,31 @@ CREATE TABLE IF NOT EXISTS rides (
 
 CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
 CREATE INDEX IF NOT EXISTS idx_rides_created_at ON rides(created_at DESC);
+
+-- Fase 1: Usuários e perfis de acesso (base local; depois Firebase/Google/Microsoft)
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  profile TEXT NOT NULL CHECK (profile IN ('gestor_central', 'gestor_unidade', 'usuario')),
+  reset_token TEXT,
+  reset_token_expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_profile ON users(profile);
+
+-- Corridas vinculadas ao usuário solicitante (Fase 1)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rides' AND column_name = 'requested_by_user_id') THEN
+    ALTER TABLE rides ADD COLUMN requested_by_user_id UUID REFERENCES users(id);
+    CREATE INDEX idx_rides_requested_by ON rides(requested_by_user_id);
+  END IF;
+END $$;
 `;
 
 async function migrate() {

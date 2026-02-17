@@ -1,17 +1,45 @@
 import 'package:flutter/material.dart';
 
+import 'package:rumo_app/core/services/auth_service.dart';
 import 'package:rumo_app/modules/backoffice/screens/backoffice_home_screen.dart';
 import 'package:rumo_app/modules/motorista/screens/motorista_home_screen.dart';
 import 'package:rumo_app/modules/passageiro/screens/passageiro_home_screen.dart';
+import 'change_password_screen.dart';
 
 /// Tela inicial do app: escolha do módulo (Passageiro, Motorista ou Backoffice).
 class ModuleSelectorScreen extends StatelessWidget {
-  const ModuleSelectorScreen({super.key});
+  final VoidCallback? onLogout;
+
+  const ModuleSelectorScreen({super.key, this.onLogout});
 
   @override
   Widget build(BuildContext context) {
+    final user = AuthService().currentUser;
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        title: const Text('Rumo', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.lock_reset),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ChangePasswordScreen()),
+              );
+            },
+            tooltip: 'Alterar senha',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().logout();
+              onLogout?.call();
+            },
+            tooltip: 'Sair',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -19,16 +47,13 @@ class ModuleSelectorScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                'Rumo',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              if (user != null) ...[
+                Text(
+                  'Olá, ${user.name}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[400]),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
+              ],
               Text(
                 'Escolha como deseja usar o app',
                 style: TextStyle(
