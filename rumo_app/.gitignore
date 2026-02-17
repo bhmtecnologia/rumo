@@ -31,6 +31,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# Permitir build web para deploy (ex.: Render Static Site)
+!/build/web/
+!/build/web/**
 /coverage/
 
 # Symbolication related
