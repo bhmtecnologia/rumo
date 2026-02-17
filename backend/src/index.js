@@ -1,3 +1,4 @@
+import './load-dns.js';
 import './load-env.js';
 import app from './app.js';
 
