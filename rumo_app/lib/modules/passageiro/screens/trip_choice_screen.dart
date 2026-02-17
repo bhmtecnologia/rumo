@@ -134,6 +134,38 @@ class TripChoiceScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.radio_button_checked, size: 16, color: Colors.green[700]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          pickupAddress,
+                          style: TextStyle(fontSize: 13, color: Colors.grey[300]),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.place, size: 16, color: Colors.red[700]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          destinationAddress,
+                          style: TextStyle(fontSize: 13, color: Colors.grey[300]),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Card(
                     child: ListTile(

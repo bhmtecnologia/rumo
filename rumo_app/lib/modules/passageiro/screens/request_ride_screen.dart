@@ -1,3 +1,5 @@
+import 'dart:math' show asin, cos, sqrt;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,7 +7,6 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/nominatim_service.dart';
-import 'package:rumo_app/core/widgets/rumo_map.dart';
 
 import 'trip_choice_screen.dart';
 
@@ -21,7 +22,6 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   String _destinationAddress = '';
   LatLng? _pickupCoords;
   LatLng? _destinationCoords;
-  LatLng? _userLocation;
   bool _locationLoading = true;
   String? _locationError;
   String? _error;
@@ -32,11 +32,12 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   List<NominatimResult> _searchResults = [];
   bool _showSearchResults = false;
 
+  /// Sugestões com coordenadas reais quando disponível (lat, lng).
   static const _suggestions = [
-    _Suggestion('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF'),
-    _Suggestion('Aeroporto Internacional de Brasília', 'Lago Sul, Brasília - DF'),
-    _Suggestion('Ed. The Union office', 'Brasília - DF'),
-    _Suggestion('Pizza à Bessa', 'Brasília - DF'),
+    _Suggestion('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF', -15.7939, -47.8822),
+    _Suggestion('Aeroporto Internacional de Brasília', 'Lago Sul, Brasília - DF', -15.8711, -47.9186),
+    _Suggestion('Ed. The Union office', 'Brasília - DF', null, null),
+    _Suggestion('Pizza à Bessa', 'Brasília - DF', null, null),
   ];
 
   @override
@@ -81,7 +82,6 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
           await _nominatim.reverseGeocode(pos.latitude, pos.longitude);
       if (mounted) {
         setState(() {
-          _userLocation = latLng;
           _pickupCoords = latLng;
           _pickupAddress = address ?? 'Minha localização';
           _locationLoading = false;
@@ -98,6 +98,15 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     }
   }
 
+  /// Distância aproximada em km entre dois pontos (Haversine).
+  static double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+    const p = 0.017453292519943295; // pi / 180
+    final a = 0.5 -
+        cos((lat2 - lat1) * p) / 2 +
+        cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
+    return 12742 * asin(sqrt(a)); // 2 * R = 12742 km
+  }
+
   Future<void> _searchDestination(String query) async {
     if (query.trim().length < 3) {
       setState(() {
@@ -107,12 +116,25 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
       return;
     }
     final results = await _nominatim.search(query);
-    if (mounted) {
-      setState(() {
-        _searchResults = results;
-        _showSearchResults = true;
-      });
-    }
+    if (!mounted) return;
+    // Ordena por proximidade da origem (aeroporto/localidade mais perto primeiro).
+    final sorted = _pickupCoords != null && results.isNotEmpty
+        ? _sortByDistanceFrom(results, _pickupCoords!)
+        : results;
+    setState(() {
+      _searchResults = sorted;
+      _showSearchResults = true;
+    });
+  }
+
+  List<NominatimResult> _sortByDistanceFrom(List<NominatimResult> list, LatLng from) {
+    final out = List<NominatimResult>.from(list);
+    out.sort((a, b) {
+      final da = _distanceKm(from.latitude, from.longitude, a.lat, a.lon);
+      final db = _distanceKm(from.latitude, from.longitude, b.lat, b.lon);
+      return da.compareTo(db);
+    });
+    return out;
   }
 
   void _selectDestination(String address, LatLng coords) {
@@ -169,6 +191,10 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   }
 
   Future<void> _openTripChoiceFromSuggestion(_Suggestion s) async {
+    if (s.lat != null && s.lng != null) {
+      _selectDestination(s.name, LatLng(s.lat!, s.lng!));
+      return;
+    }
     final results = await _nominatim.search(s.address);
     if (results.isEmpty) {
       setState(() => _error = 'Endereço não encontrado.');
@@ -226,15 +252,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
                         style: TextStyle(color: Colors.red[700]),
                       ),
                     ),
-                  if (!_loading)
-                    RumoMap(
-                      pickup: _pickupCoords,
-                      destination: _destinationCoords,
-                      userLocation: _userLocation,
-                      height: 220,
-                      fitBounds: _destinationCoords != null,
-                    ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -328,5 +346,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
 class _Suggestion {
   final String name;
   final String address;
-  const _Suggestion(this.name, this.address);
+  final double? lat;
+  final double? lng;
+  const _Suggestion(this.name, this.address, [this.lat, this.lng]);
 }
