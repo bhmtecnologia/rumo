@@ -21,6 +21,8 @@ router.post('/login', async (req, res) => {
     }
 
     const emailNorm = email.trim().toLowerCase();
+    console.log('[auth] login attempt', { email: emailNorm, provider: useSupabase() ? 'supabase' : 'pg' });
+
     let user = null;
     let costCenterIds = [];
 
@@ -31,7 +33,12 @@ router.post('/login', async (req, res) => {
         .select('id, email, name, profile, password_hash')
         .eq('email', emailNorm)
         .limit(1);
-      if (userError || !users?.length) {
+      if (userError) {
+        console.log('[auth] login supabase error', { email: emailNorm, message: userError.message, code: userError.code });
+        return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      }
+      if (!users?.length) {
+        console.log('[auth] login user not found', { email: emailNorm });
         return res.status(401).json({ error: 'E-mail ou senha incorretos' });
       }
       user = users[0];
@@ -46,6 +53,7 @@ router.post('/login', async (req, res) => {
         [email.trim()]
       );
       if (r.rows.length === 0) {
+        console.log('[auth] login user not found (pg)', { email: emailNorm });
         return res.status(401).json({ error: 'E-mail ou senha incorretos' });
       }
       user = r.rows[0];
@@ -58,8 +66,11 @@ router.post('/login', async (req, res) => {
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
+      console.log('[auth] login invalid password', { email: emailNorm, userId: user.id });
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
     }
+
+    console.log('[auth] login ok', { email: emailNorm, userId: user.id });
 
     const token = signToken({
       id: user.id,

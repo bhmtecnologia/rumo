@@ -65,6 +65,46 @@ Com essas duas variáveis definidas, as rotas de **auth** (login, /me, alterar s
 
 ---
 
+## Usuário admin não existe no Supabase (e-mail ou senha incorretos)
+
+Se o login não dá mais erro de rede, mas **admin@rumo.local** / **rumo123** retorna "E-mail ou senha incorretos", o usuário provavelmente **não existe** no projeto Supabase que o Render está usando (o seed foi rodado em outro banco ou nunca foi rodado nesse projeto).
+
+**Opção 1 – Rodar o seed no mesmo Supabase do Render**
+
+No seu PC, com o `.env` apontando para o **mesmo** Supabase (use a **Session pooler** em `DATABASE_URL` para evitar IPv6):
+
+```bash
+cd backend
+npm run db:migrate
+npm run db:seed
+```
+
+Assim o usuário `admin@rumo.local` (senha `rumo123`) é criado nesse projeto.
+
+**Opção 2 – Inserir o admin pelo Supabase Dashboard**
+
+1. No backend, gere o hash da senha:
+   ```bash
+   cd backend && node scripts/hash-password.js rumo123
+   ```
+2. Copie o hash (ex.: `$2b$10$...`).
+3. No **Supabase** → **SQL Editor**, execute (substitua `SEU_HASH_AQUI` pelo hash gerado):
+
+   ```sql
+   INSERT INTO users (email, password_hash, name, profile)
+   VALUES (
+     'admin@rumo.local',
+     'SEU_HASH_AQUI',
+     'Administrador',
+     'gestor_central'
+   )
+   ON CONFLICT (email) DO NOTHING;
+   ```
+
+O e-mail deve estar em **minúsculas** (`admin@rumo.local`) para o login encontrar o usuário.
+
+---
+
 ## Erro de login no Render: ENETUNREACH / conexão com o banco (alternativa: pooler)
 
 Se o login falha no Render com algo como:

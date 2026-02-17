@@ -18,7 +18,13 @@ export function getSupabase() {
   if (_client !== null) return _client;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
+  if (!url || !key) {
+    return null;
+  }
+  try {
+    const host = new URL(url).hostname;
+    console.log('[auth] using Supabase for DB', { host });
+  } catch (_) {}
   _client = createClient(url, key, {
     auth: {
       persistSession: false,
