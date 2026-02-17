@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment (nunca commitar senhas)
+.env
+.env.local
+.env.*.local
+
+# Build / output
+dist/
+build/
+*.log
+coverage/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test
+.nyc_output/

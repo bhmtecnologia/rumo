@@ -1,0 +1,22 @@
+{
+  "name": "rumo-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "db:migrate": "node src/db/migrate.js",
+    "test": "node --test \"src/**/*.test.js\" \"src/**/*.integration.test.js\"",
+    "test:unit": "node --test \"src/lib/**/*.test.js\"",
+    "test:integration": "node --test \"src/routes/**/*.integration.test.js\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}
