@@ -111,11 +111,13 @@ export function RideMap({ pickup, destination, userLocation, className, onMapCli
           <Polyline
             positions={routePositions}
             pathOptions={{
-              color: '#e8b84a',
+              color: '#3b82f6',
               weight: 5,
-              opacity: 0.9,
+              opacity: 0.95,
               lineJoin: 'round',
               lineCap: 'round',
+              dashArray: [15, 15],
+              className: 'rumo-route-moving',
             }}
           />
         )}

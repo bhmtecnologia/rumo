@@ -41,3 +41,15 @@
 .map :global(.leaflet-container) {
   font-family: var(--font);
 }
+
+/* Linha da rota azul e em movimento */
+:global(.rumo-route-moving) path {
+  stroke-dasharray: 20 12;
+  animation: rumoRouteMove 0.6s linear infinite;
+}
+
+@keyframes rumoRouteMove {
+  to {
+    stroke-dashoffset: -32;
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getEstimate, createRide } from '../api';
-import { reverseGeocode } from '../lib/nominatim';
+import { reverseGeocode, searchAddress } from '../lib/nominatim';
 import { AddressInput } from '../components/AddressInput';
 import { RideMap } from '../components/RideMap';
 import { MapPickerScreen } from './MapPickerScreen';
@@ -24,6 +24,7 @@ export function RequestRide({ onRideRequested, onBack }) {
   const [skipDestinationSearch, setSkipDestinationSearch] = useState(false);
   const [mapPickFeedback, setMapPickFeedback] = useState(null);
   const mapPickCooldownRef = useRef(false);
+  const [view, setView] = useState('form');
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -66,32 +67,36 @@ export function RequestRide({ onRideRequested, onBack }) {
   const canEstimate = pickup.trim() && destination.trim();
   const hasCoords = pickupCoords && destinationCoords;
 
-  const handleEstimate = useCallback(async () => {
-    if (!canEstimate) return;
+  const openTripChoiceWithDestination = useCallback(async (destAddress, destCoords) => {
+    if (!pickup?.trim() || !destAddress?.trim()) return;
+    setDestination(destAddress);
+    setDestinationCoords(destCoords);
+    setEstimate(null);
     setError('');
     setLoading(true);
     try {
       const body = {
         pickupAddress: pickup.trim(),
-        destinationAddress: destination.trim(),
+        destinationAddress: destAddress.trim(),
       };
       if (pickupCoords?.lat != null) {
         body.pickupLat = pickupCoords.lat;
         body.pickupLng = pickupCoords.lng;
       }
-      if (destinationCoords?.lat != null) {
-        body.destinationLat = destinationCoords.lat;
-        body.destinationLng = destinationCoords.lng;
+      if (destCoords?.lat != null) {
+        body.destinationLat = destCoords.lat;
+        body.destinationLng = destCoords.lng;
       }
       const data = await getEstimate(body);
       setEstimate(data);
+      setView('tripChoice');
     } catch (e) {
       setError(e.message);
       setEstimate(null);
     } finally {
       setLoading(false);
     }
-  }, [pickup, destination, pickupCoords, destinationCoords, canEstimate]);
+  }, [pickup, pickupCoords]);
 
   const handleRequestRide = useCallback(async () => {
     if (!estimate) return;
@@ -168,15 +173,57 @@ export function RequestRide({ onRideRequested, onBack }) {
         initialCenter={userLocation || pickupCoords}
         onConfirm={({ lat, lng, address }) => {
           setSkipDestinationSearch(true);
-          setDestination(address);
-          setDestinationCoords({ lat, lng });
-          setEstimate(null);
-          setMapPickFeedback('Destino definido no mapa');
           setShowFullScreenMapPicker(false);
-          setTimeout(() => setMapPickFeedback(null), 2500);
+          setMapPickFeedback(null);
+          openTripChoiceWithDestination(address, { lat, lng });
         }}
         onBack={() => setShowFullScreenMapPicker(false)}
       />
+    );
+  }
+
+  if (view === 'tripChoice' && estimate) {
+    return (
+      <div className={`${styles.page} ${styles.pageTripChoice}`}>
+        <header className={styles.headerTripChoice}>
+          <button type="button" className={styles.back} onClick={() => setView('form')} aria-label="Voltar">
+            ←
+          </button>
+        </header>
+        <div className={styles.tripChoiceMapWrap}>
+          <RideMap
+            pickup={pickupCoords}
+            destination={destinationCoords}
+            userLocation={userLocation}
+            className={styles.tripChoiceMap}
+          />
+        </div>
+        <div className={styles.tripChoicePanel}>
+          <h2 className={styles.chooseTripTitle}>Escolher uma viagem</h2>
+          <div className={styles.tripCard}>
+            <div className={styles.tripCardHeader}>
+              <span className={styles.tripCardIcon}>🚗</span>
+              <div className={styles.tripCardInfo}>
+                <span className={styles.tripCardName}>Rumo</span>
+                <span className={styles.tripCardMeta}>4 passageiros</span>
+              </div>
+              <div className={styles.tripCardRight}>
+                <span className={styles.tripCardTime}>{estimate.durationMin} min</span>
+                <strong className={styles.tripCardPrice}>{estimate.formattedPrice}</strong>
+              </div>
+            </div>
+            <p className={styles.tripCardBadge}>Mais rápido</p>
+          </div>
+          <button
+            type="button"
+            className={styles.btnChooseTrip}
+            onClick={handleRequestRide}
+            disabled={requesting}
+          >
+            {requesting ? 'Solicitando...' : 'Escolha Rumo'}
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -257,9 +304,8 @@ export function RequestRide({ onRideRequested, onBack }) {
                 value={destination}
                 onChange={setDestination}
                 onSelect={({ address, lat, lng }) => {
-                  setDestination(address);
-                  setDestinationCoords({ lat, lng });
-                  setEstimate(null);
+                  setSkipDestinationSearch(true);
+                  openTripChoiceWithDestination(address, { lat, lng });
                 }}
                 placeholder="Para onde?"
                 data-dot="destination"
@@ -276,11 +322,13 @@ export function RequestRide({ onRideRequested, onBack }) {
               key={s.id}
               type="button"
               className={styles.sugestaoItem}
-              onClick={() => {
-                setDestination(s.nome);
-                setDestinationCoords(null);
-                setEstimate(null);
-                destinationInputRef.current?.focus();
+              onClick={async () => {
+                const results = await searchAddress(s.endereco);
+                if (results?.[0]) {
+                  openTripChoiceWithDestination(s.nome, { lat: results[0].lat, lng: results[0].lon });
+                } else {
+                  setError('Endereço não encontrado. Tente outro ou pesquise no campo acima.');
+                }
               }}
             >
               <span className={styles.sugestaoIcon}>{s.icon}</span>
@@ -311,40 +359,10 @@ export function RequestRide({ onRideRequested, onBack }) {
 
         {error && <p className={styles.error}>{error}</p>}
 
-        {!estimate ? (
-          <button
-            type="button"
-            className={styles.btnPrimary}
-            onClick={handleEstimate}
-            disabled={!canEstimate || loading}
-          >
-            {loading ? 'Calculando...' : 'Ver preço estimado'}
-          </button>
-        ) : (
-          <div className={styles.card}>
-            <div className={styles.estimateBox}>
-              <div className={styles.estimateRow}>
-                <span>Distância</span>
-                <span>{estimate.distanceKm} km</span>
-              </div>
-              <div className={styles.estimateRow}>
-                <span>Tempo estimado</span>
-                <span>{estimate.durationMin} min</span>
-              </div>
-              <div className={styles.estimatePrice}>
-                <span>Preço estimado</span>
-                <strong>{estimate.formattedPrice}</strong>
-              </div>
-            </div>
-            <button
-              type="button"
-              className={styles.btnRequest}
-              onClick={handleRequestRide}
-              disabled={requesting}
-            >
-              {requesting ? 'Solicitando...' : 'Solicitar Rumo'}
-            </button>
-          </div>
+        {loading && (
+          <p className={styles.locationStatus}>
+            <span className={styles.locationSpinner} /> Calculando rota...
+          </p>
         )}
       </main>
     </div>
