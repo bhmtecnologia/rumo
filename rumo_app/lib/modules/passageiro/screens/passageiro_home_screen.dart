@@ -2,58 +2,326 @@ import 'package:flutter/material.dart';
 
 import 'request_ride_screen.dart';
 
-/// Home do módulo Passageiro: entrada para pedir corrida.
-class PassageiroHomeScreen extends StatelessWidget {
+/// Home do módulo Passageiro no estilo combinado: "Para onde?", destinos recentes, sugestões e menu inferior.
+class PassageiroHomeScreen extends StatefulWidget {
   const PassageiroHomeScreen({super.key});
+
+  @override
+  State<PassageiroHomeScreen> createState() => _PassageiroHomeScreenState();
+}
+
+class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
+  int _currentIndex = 0;
+
+  static const _recentDestinations = [
+    _DestinationItem('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF', Icons.access_time),
+    _DestinationItem('Aeroporto Internacional de Brasília - Presidente Juscelino Kubitschek', 'Lago Sul, Brasília - DF', Icons.flight),
+  ];
+
+  static const _sugestoesCards = [
+    _SugestaoCard('Viagem', Icons.directions_car),
+    _SugestaoCard('Enviar itens', Icons.inventory_2_outlined),
+    _SugestaoCard('Reserve', Icons.calendar_today_outlined),
+    _SugestaoCard('Teens', Icons.person_outline),
+  ];
+
+  void _openRequestRide() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RequestRideScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Rumo – Passageiro'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+      backgroundColor: const Color(0xFF121212),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 8),
+                    _buildSearchBar(),
+                    const SizedBox(height: 24),
+                    ..._recentDestinations.map((d) => _buildDestinationTile(d)),
+                    const SizedBox(height: 24),
+                    _buildSugestoesSection(),
+                    const SizedBox(height: 24),
+                    _buildMaisFormasCard(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+            _buildBottomNav(),
+          ],
         ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Para onde vamos?',
-                style: TextStyle(
-                  fontSize: 22,
-                  color: Colors.grey[700],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.directions_car, color: Colors.white, size: 28),
+          const SizedBox(width: 8),
+          Text(
+            'Rumo',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
                 ),
-                textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: _openRequestRide,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2C),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const RequestRideScreen(),
+              child: Row(
+                children: [
+                  Icon(Icons.search, color: Colors.grey[400], size: 22),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Para onde?',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Agendar viagem em breve')),
+            );
+          },
+          icon: const Icon(Icons.calendar_today, size: 18),
+          label: const Text('Mais tarde'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white70,
+            side: BorderSide(color: Colors.grey[600]!),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDestinationTile(_DestinationItem d) {
+    return InkWell(
+      onTap: _openRequestRide,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            Icon(d.icon, color: Colors.grey[400], size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    d.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
                     ),
-                  );
-                },
-                icon: const Icon(Icons.add_road),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('Pedir corrida'),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    d.subtitle,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSugestoesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Sugestões',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[500]),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: _sugestoesCards.map((s) {
+            final isViagem = s.label == 'Viagem';
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Material(
+                  color: const Color(0xFF2C2C2C),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: () {
+                      if (isViagem) _openRequestRide();
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            s.icon,
+                            color: isViagem ? const Color(0xFF00D95F) : Colors.grey[400],
+                            size: 28,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            s.label,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMaisFormasCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mais formas de usar o app',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          height: 140,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C2C2C),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              'Em breve',
+              style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 8, offset: const Offset(0, -2)),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _navItem(Icons.home, 'Página inicial', 0),
+              _navItem(Icons.grid_view_rounded, 'Opções', 1),
+              _navItem(Icons.receipt_long_outlined, 'Atividade', 2),
+              _navItem(Icons.person_outline, 'Conta', 3),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _navItem(IconData icon, String label, int index) {
+    final selected = _currentIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _currentIndex = index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 24,
+            color: selected ? const Color(0xFF00D95F) : Colors.grey[500],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: selected ? const Color(0xFF00D95F) : Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationItem {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  const _DestinationItem(this.title, this.subtitle, this.icon);
+}
+
+class _SugestaoCard {
+  final String label;
+  final IconData icon;
+  const _SugestaoCard(this.label, this.icon);
 }

@@ -40,11 +40,14 @@ lib/
 
 ## Configurar a URL da API
 
-Edite `lib/core/config.dart` e defina `kApiBaseUrl`:
+Edite **só** o arquivo `lib/core/config.dart`:
 
-- **Emulador Android:** `http://10.0.2.2:3001/api`
-- **Simulador iOS:** `http://localhost:3001/api`
-- **Dispositivo físico:** IP da sua máquina, ex: `http://192.168.1.10:3001/api`
+- **`kApiBaseUrlWeb`** – usada quando você roda no Chrome (ex: `http://localhost:3001/api`).
+- **`kApiBaseUrlMobile`** – usada no emulador Android (ex: `http://10.0.2.2:3001/api`).
+
+A API do backend deve estar rodando nessa mesma URL (ex: `npm run dev` no `backend/` sobe na porta 3001).
+
+**Importante:** quando você roda `flutter run -d chrome`, o navegador abre em uma porta aleatória (ex: 12345). Essa é a porta do **app**, não da API. A API é sempre a que está em `config.dart` (ex: 3001).
 
 ## Rodar o app
 

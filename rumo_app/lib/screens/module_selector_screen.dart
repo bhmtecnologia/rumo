@@ -11,6 +11,7 @@ class ModuleSelectorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -23,6 +24,7 @@ class ModuleSelectorScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -31,7 +33,7 @@ class ModuleSelectorScreen extends StatelessWidget {
                 'Escolha como deseja usar o app',
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.grey[600],
+                  color: Colors.grey[400],
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -86,6 +88,7 @@ class _ModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: const Color(0xFF2C2C2C),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -95,7 +98,8 @@ class _ModuleCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 28,
-                child: Icon(icon, size: 32),
+                backgroundColor: const Color(0xFF00D95F).withValues(alpha: 0.2),
+                child: Icon(icon, size: 32, color: const Color(0xFF00D95F)),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -106,6 +110,7 @@ class _ModuleCard extends StatelessWidget {
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
                     ),
                     const SizedBox(height: 4),
@@ -113,13 +118,13 @@ class _ModuleCard extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[600],
+                        color: Colors.grey[400],
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[500]),
             ],
           ),
         ),
