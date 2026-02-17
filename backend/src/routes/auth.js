@@ -38,7 +38,10 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'E-mail ou senha incorretos' });
       }
       if (!users?.length) {
-        console.log('[auth] login user not found', { email: emailNorm });
+        console.log('[auth] login user not found (Supabase)', {
+          email: emailNorm,
+          hint: 'Se o usuário existe no banco, use SUPABASE_SERVICE_ROLE_KEY (secret), não a chave anon (RLS bloqueia).',
+        });
         return res.status(401).json({ error: 'E-mail ou senha incorretos' });
       }
       user = users[0];

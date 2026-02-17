@@ -57,7 +57,8 @@ Para evitar **ENETUNREACH** (Render não consegue abrir conexão TCP com o Postg
 **No Render (Web Service rumo-f09a) → Environment:**
 
 1. **SUPABASE_URL** — no Supabase: **Project Settings** → **API** → **Project URL** (ex.: `https://xxxx.supabase.co`).
-2. **SUPABASE_SERVICE_ROLE_KEY** — na mesma página, em **Project API keys**, copie a **service_role** (secret; não use a anon key).
+2. **SUPABASE_SERVICE_ROLE_KEY** — na mesma página, em **Project API keys**, copie a chave **`service_role`** (label **secret**; **não use a chave `anon`**).  
+   A tabela `users` tem RLS ativado; só a **service_role** ignora RLS. Se você usar a chave anon, o login sempre retorna "E-mail ou senha incorretos" (nenhum usuário é visível).
 
 Com essas duas variáveis definidas, as rotas de **auth** (login, /me, alterar senha, recuperar senha, registro) e o **log de auditoria** passam a usar a API do Supabase. O login deixa de depender de conexão TCP e funciona no Render.
 
