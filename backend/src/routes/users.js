@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { logAudit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireProfile } from '../middleware/requireAuth.js';
 import { isGestorCentral } from '../lib/auth.js';
@@ -139,7 +140,7 @@ router.patch('/:id', async (req, res) => {
       idx++;
     }
     if (profile != null && isCentral) {
-      const allowed = ['gestor_central', 'gestor_unidade', 'usuario'];
+      const allowed = ['gestor_central', 'gestor_unidade', 'usuario', 'motorista'];
       if (!allowed.includes(profile)) {
         return res.status(400).json({ error: 'Perfil inválido' });
       }
@@ -183,6 +184,7 @@ router.patch('/:id', async (req, res) => {
       [id]
     );
     const row = updated.rows[0];
+    await logAudit('user_updated', req.user.id, 'user', id, { email: row.email });
     return res.json({
       id: row.id,
       email: row.email,
@@ -210,7 +212,7 @@ router.post('/', requireProfile('gestor_central'), async (req, res) => {
         error: 'E-mail, senha, nome e perfil são obrigatórios',
       });
     }
-    const allowed = ['gestor_central', 'gestor_unidade', 'usuario'];
+    const allowed = ['gestor_central', 'gestor_unidade', 'usuario', 'motorista'];
     if (!allowed.includes(profile)) {
       return res.status(400).json({ error: 'Perfil inválido' });
     }
@@ -237,6 +239,7 @@ router.post('/', requireProfile('gestor_central'), async (req, res) => {
       'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
       [user.id]
     );
+    await logAudit('user_created', req.user.id, 'user', user.id, { email: user.email, profile: user.profile });
     return res.status(201).json({
       id: user.id,
       email: user.email,

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
 import { hashPassword, verifyPassword, signToken } from '../lib/auth.js';
+import { logAudit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import crypto from 'crypto';
 
@@ -39,6 +40,12 @@ router.post('/login', async (req, res) => {
       profile: user.profile,
     });
 
+    const ccRows = await pool.query(
+      'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
+      [user.id]
+    );
+    const costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
+    await logAudit('auth_login', user.id, 'user', user.id, { email: user.email });
     return res.json({
       token,
       user: {
@@ -46,6 +53,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         name: user.name,
         profile: user.profile,
+        costCenterIds,
       },
     });
   } catch (err) {
@@ -69,12 +77,18 @@ router.get('/me', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     const row = r.rows[0];
+    const ccRows = await pool.query(
+      'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
+      [row.id]
+    );
+    const costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
     return res.json({
       user: {
         id: row.id,
         email: row.email,
         name: row.name,
         profile: row.profile,
+        costCenterIds,
       },
     });
   } catch (err) {
@@ -111,6 +125,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
       'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
       [newHash, req.user.id]
     );
+    await logAudit('auth_password_changed', req.user.id, 'user', req.user.id, {});
     return res.json({ ok: true, message: 'Senha alterada com sucesso' });
   } catch (err) {
     console.error('Change password error:', err);
@@ -195,7 +210,7 @@ router.post('/reset-password', async (req, res) => {
       'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires_at = NULL, updated_at = NOW() WHERE id = $2',
       [newHash, userId]
     );
-
+    await logAudit('auth_password_reset', userId, 'user', userId, {});
     return res.json({ ok: true, message: 'Senha redefinida com sucesso' });
   } catch (err) {
     console.error('Reset password error:', err);
@@ -216,7 +231,7 @@ router.post('/register', async (req, res) => {
         error: 'E-mail, senha, nome e perfil são obrigatórios',
       });
     }
-    const allowedProfiles = ['gestor_central', 'gestor_unidade', 'usuario'];
+    const allowedProfiles = ['gestor_central', 'gestor_unidade', 'usuario', 'motorista'];
     if (!allowedProfiles.includes(profile)) {
       return res.status(400).json({ error: 'Perfil inválido' });
     }
@@ -240,9 +255,10 @@ router.post('/register', async (req, res) => {
       name: user.name,
       profile: user.profile,
     });
+    await logAudit('auth_register', user.id, 'user', user.id, { email: user.email, profile });
     return res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, profile: user.profile },
+      user: { id: user.id, email: user.email, name: user.name, profile: user.profile, costCenterIds: [] },
     });
   } catch (err) {
     if (err.code === '23505') {

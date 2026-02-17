@@ -241,6 +241,63 @@ Implementado:
 
 ---
 
+## Fase 3 – Concluída (limites e restrições)
+
+Implementado:
+
+- **Backend:** Em `cost_centers`: campos `blocked`, `monthly_limit_cents`, `max_km`, `allowed_time_start`, `allowed_time_end`. Tabela `cost_center_allowed_areas` (cost_center_id, type origin|destination, lat, lng, radius_km, label). Em `rides`: coluna `cost_center_id`. Lib `restrictions.js`: `checkRestrictions(costCenterId, userId, options)` valida bloqueio, janela de horário, max_km, limite mensal (soma do mês) e áreas permitidas (haversine). Em `POST /api/rides/estimate` e `POST /api/rides`: resolução do centro de custo (body opcional `cost_center_id`; se usuário tem um só, usa; se vários, exige envio); validação via `checkRestrictions`; 403 com mensagem quando restrição falha. Login e `GET /api/auth/me` retornam `costCenterIds` do usuário. Rotas `GET /api/cost-centers/:id` (com `allowedAreas`), `PATCH /api/cost-centers/:id` (restrições), `POST /api/cost-centers/:id/areas`, `DELETE /api/cost-centers/:id/areas/:areaId`.
+- **Flutter backoffice:** Tela **Restrições** por centro de custo (menu no item da lista): bloqueado, limite mensal (R$), distância máx (km), horário início/fim (HH:mm), áreas permitidas (origem/destino) com adicionar/remover. Apenas Gestor Central pode editar; Gestor Unidade pode visualizar.
+- **Flutter passageiro:** Envio de `cost_center_id` em estimativa e criação de corrida: um centro → uso automático; vários → seletor na tela “Planeje sua viagem”. Erro 403 exibe a mensagem retornada pela API (restrições do centro de custo).
+- **ApiService:** `getCostCenter(id)`, `updateCostCenter(id, ...)` com parâmetros opcionais de restrição, `addCostCenterArea`, `deleteCostCenterArea`; `getEstimate` e `createRide` aceitam `costCenterId` opcional e tratam 403.
+
+---
+
+## Fase 4 – Concluída (fluxo completo da corrida)
+
+Implementado:
+
+- **Backend:** Perfil `motorista` em `users`. Em `rides`: status `driver_arrived`; colunas `driver_user_id`, `driver_name`, `vehicle_plate`, `accepted_at`, `driver_arrived_at`, `started_at`, `completed_at`, `cancelled_at`, `actual_price_cents`, `actual_distance_km`, `actual_duration_min`, `trajectory` (JSONB), `rating`, `cancel_reason`, `cancelled_by_user_id`. Endpoints: `PATCH /api/rides/:id/accept` (motorista, body opcional `vehiclePlate`), `PATCH /api/rides/:id/arrived`, `PATCH /api/rides/:id/start`, `PATCH /api/rides/:id/complete` (body `actualPriceCents`, opcional `actualDistanceKm`, `actualDurationMin`), `PATCH /api/rides/:id/cancel` (solicitante ou motorista, body opcional `reason`), `POST /api/rides/:id/rate` (body `rating` 1–5, apenas solicitante). `GET /api/rides` para motorista: `?available=1` lista corridas com status `requested`; sem parâmetro lista corridas do motorista (`driver_user_id = eu`). `GET /api/rides/:id` retorna detalhe completo (acesso: solicitante, motorista da corrida ou gestor central).
+- **Flutter:** Modelo `Ride` ampliado (driver, timestamps, valores efetivos, rating). `RideListItem` com `driverName`, `vehiclePlate`. ApiService: `getRide(id)`, `listRides(available: true|false)`, `acceptRide`, `markRideArrived`, `startRide`, `completeRide`, `cancelRide`, `rateRide`.
+- **App motorista:** Lista de corridas disponíveis (status requested) e card “Sua corrida” quando há corrida aceita/em andamento. Aceitar com placa opcional; tela **Corrida ativa** com botões “Cheguei na origem”, “Iniciar viagem”, “Finalizar corrida” (formulário valor/km/duração) e “Cancelar corrida”.
+- **App passageiro:** Tela “Solicitação enviada” com **polling** a cada 3 s; mensagens por status (motorista a caminho, chegou, viagem em andamento); botão **Cancelar corrida**; ao concluir, navega para **Avaliar corrida** (1–5 estrelas) e em seguida volta ao início.
+- **Uso:** Criar usuário com perfil **motorista** pelo backoffice (Usuários). Login como motorista → módulo Motorista → ver corridas disponíveis e aceitar. Login como usuário/passageiro → solicitar corrida → acompanhar e, ao final, avaliar.
+
+---
+
+## Fase 5 – Concluída (backoffice e relatórios)
+
+Implementado:
+
+- **Backend:** Rotas `GET /api/reports/rides` (query: `from`, `to`, `costCenterId`, `unitId`) e `GET /api/reports/cadastrais` (query: `type` = units | cost_centers | users | request_reasons). Respeito ao perfil: Gestor Central vê todos os dados; Gestor Unidade apenas corridas e cadastros dos centros de custo a que está vinculado. Retorno em JSON para consumo pelo backoffice e exportação no cliente.
+- **Flutter backoffice:** Item **Relatórios** no menu do backoffice. Tela com duas seções: (1) **Relatório de corridas** – filtros por data início/fim, unidade e centro de custo; botões Exportar CSV, Exportar XML e Exportar XLS (geração no cliente; download na web); (2) **Relatório cadastral** – tipo (Units, Centros de custo, Usuários, Motivos de solicitação); Exportar CSV, XML e XLS. Dependências: `excel` (XLS), `intl` (formato de data). Download de arquivo na web via `dart:html` (helper com stub para não-web).
+- **Histórico em tempo real:** A Central do backoffice já atualiza a lista de corridas a cada 15 segundos (polling); os relatórios permitem consultar e exportar o histórico conforme filtros.
+- **Política de retenção:** Documento `docs/POLITICA_RETENCAO_DADOS.md` descreve a retenção mínima de 90 dias (Anexo D 4) e a responsabilidade operacional de não apagar dados dentro dessa janela.
+
+---
+
+## Fase 6 – Concluída (API de integração)
+
+Implementado:
+
+- **Recibo:** `GET /api/rides/:id/receipt` — retorna recibo da corrida (apenas status `completed`): endereços, motorista, veículo, datas de início/fim, valor final, distância, duração, avaliação. Acesso: solicitante, motorista ou gestor central.
+- **Comunicação usuário–motorista:** Tabela `ride_messages` (ride_id, user_id, text, created_at). `GET /api/rides/:id/messages` — lista mensagens da corrida; `POST /api/rides/:id/messages` (body: `text`) — envia mensagem (solicitante ou motorista).
+- **Documentação:** `docs/api-openapi.yaml` — OpenAPI 3.0 com todos os endpoints: auth (login, me, change-password, forgot-password, reset-password, register), rides (estimate, criação, listagem, detalhe, accept/arrived/start/complete/cancel, rate, receipt, messages), units, cost-centers (e áreas), request-reasons, users, reports (rides e cadastrais). Autenticação Bearer JWT; respostas em JSON.
+- **Flutter:** ApiService com `getRideReceipt(id)`, `getRideMessages(id)` e `sendRideMessage(id, text)` para uso futuro (telas de recibo e chat podem ser implementadas quando desejado).
+
+Orçamento (estimate), solicitação e cancelamento, usuários, centros de custo, avaliação (rate) e relatórios já estavam implementados nas fases anteriores; a Fase 6 adiciona recibo, mensagens e documentação formal da API.
+
+---
+
+## Fase 7 – Concluída (disponibilidade, auditoria e polish)
+
+Implementado:
+
+- **Auditoria e log:** Tabela `audit_log` (event_type, user_id, resource_type, resource_id, details JSONB, created_at). Lib `audit.js` com `logAudit(...)`. Eventos registrados: auth (login, password_changed, password_reset, register), rides (accepted, driver_arrived, started, completed, cancelled), units (created, updated, deleted), cost_centers (created, updated, deleted), request_reasons (created, updated, deleted), users (created, updated). Migração aplicada via `npm run db:migrate`.
+- **Documentação:** `docs/BASE_ENDERECOS.md` — uso de geocoding (Nominatim no app), políticas de cache e atualização da base de endereços; `docs/MANUAL_USO.md` — manual para web e app (solicitações, acompanhamento, relatórios, perfis); `docs/CHECKLIST_COMPATIBILIDADE.md` — checklist para navegadores (Safari, Chrome, Edge, Firefox) e mobile (Android, iOS).
+- **Disponibilidade 24/7:** mantida como fora do escopo mínimo (deploy e monitoramento contínuo ficam a cargo da operação).
+
+---
+
 ## Próximo passo sugerido
 
-Iniciar pela **Fase 3 – Limites e restrições** ou **Fase 4 – Fluxo completo da corrida**, conforme prioridade.
+Todas as fases do plano foram implementadas. Próximos passos possíveis: deploy em ambiente de produção, monitoramento de disponibilidade, testes de compatibilidade usando o checklist e ajustes de polish conforme feedback dos usuários.

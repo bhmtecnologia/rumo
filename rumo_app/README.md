@@ -49,6 +49,28 @@ A API do backend deve estar rodando nessa mesma URL (ex: `npm run dev` no `backe
 
 **Importante:** quando você roda `flutter run -d chrome`, o navegador abre em uma porta aleatória (ex: 12345). Essa é a porta do **app**, não da API. A API é sempre a que está em `config.dart` (ex: 3001).
 
+### Por que dá erro de login com "localhost" quando acesso pela internet?
+
+Se você abre o app no **celular (3G/4G)** ou em **outro PC**, o app tenta falar com `localhost` ou `10.0.2.2`. Nesse contexto, "localhost" é o próprio celular/PC — onde **não** está rodando o backend. Por isso o login falha (ClientLoad failed, url=...localhost...).
+
+**Solução:** apontar o app para o **IP ou domínio do servidor** onde o backend está rodando:
+
+```bash
+# Exemplo: backend no PC 192.168.1.10 (mesma rede Wi‑Fi que o celular)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10:3001/api
+
+# Exemplo: backend na internet (troque pelo seu domínio ou IP público)
+flutter run --dart-define=API_BASE_URL=https://sua-api.exemplo.com/api
+```
+
+Para gerar o APK já com a URL certa:
+
+```bash
+flutter build apk --dart-define=API_BASE_URL=https://sua-api.exemplo.com/api
+```
+
+O backend precisa estar acessível nesse endereço (firewall, porta 3001 aberta ou HTTPS em produção).
+
 ## Rodar o app
 
 ```bash

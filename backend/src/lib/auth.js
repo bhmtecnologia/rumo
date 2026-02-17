@@ -28,6 +28,7 @@ export const PROFILES = Object.freeze({
   GESTOR_CENTRAL: 'gestor_central',
   GESTOR_UNIDADE: 'gestor_unidade',
   USUARIO: 'usuario',
+  MOTORISTA: 'motorista',
 });
 
 export function hasProfile(user, profile) {
@@ -44,4 +45,8 @@ export function isGestorUnidade(user) {
 
 export function isUsuario(user) {
   return hasProfile(user, PROFILES.USUARIO);
+}
+
+export function isMotorista(user) {
+  return hasProfile(user, PROFILES.MOTORISTA);
 }

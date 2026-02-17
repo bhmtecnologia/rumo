@@ -8,6 +8,7 @@ import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/modules/backoffice/screens/cost_centers_screen.dart';
 import 'package:rumo_app/modules/backoffice/screens/request_reasons_screen.dart';
+import 'package:rumo_app/modules/backoffice/screens/reports_screen.dart';
 import 'package:rumo_app/modules/backoffice/screens/units_screen.dart';
 import 'package:rumo_app/modules/backoffice/screens/users_screen.dart';
 
@@ -119,6 +120,16 @@ class _BackofficeHomeScreenState extends State<BackofficeHomeScreen> {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const UsersScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.assessment, color: Colors.white70),
+              title: const Text('Relatórios', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
                 );
               },
             ),

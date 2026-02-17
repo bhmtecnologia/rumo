@@ -1,0 +1,641 @@
+openapi: 3.0.3
+info:
+  title: API Rumo
+  description: |
+    API de integração para a solução Rumo (CREDENCIADA/CONTRATADA).
+    Autenticação via Bearer JWT. Respostas em JSON.
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Base da API (prefixo; configurar URL completa no ambiente)
+
+tags:
+  - name: Auth
+    description: Autenticação e usuário
+  - name: Rides
+    description: Corridas, orçamento, recibo e mensagens
+  - name: Units
+    description: Unidades (órgãos/entidades)
+  - name: Cost centers
+    description: Centros de custo
+  - name: Request reasons
+    description: Motivos de solicitação
+  - name: Users
+    description: Usuários (CRUD)
+  - name: Reports
+    description: Relatórios (corridas e cadastrais)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  security:
+    - bearerAuth: []
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensagem de erro
+    RideListItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [requested, accepted, driver_arrived, in_progress, completed, cancelled] }
+        pickupAddress: { type: string }
+        destinationAddress: { type: string }
+        estimatedPriceCents: { type: integer }
+        formattedPrice: { type: string }
+        createdAt: { type: string, format: date-time }
+        driverName: { type: string }
+        vehiclePlate: { type: string }
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string }
+                      name: { type: string }
+                      profile: { type: string, enum: [gestor_central, gestor_unidade, usuario, motorista] }
+                      costCenterIds: { type: array, items: { type: string, format: uuid } }
+        '401':
+          description: E-mail ou senha incorretos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Usuário autenticado
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string }
+                      name: { type: string }
+                      profile: { type: string }
+                      costCenterIds: { type: array, items: { type: string } }
+        '401':
+          description: Não autenticado
+
+  /rides/estimate:
+    post:
+      tags: [Rides]
+      summary: Pesquisa de preços (orçamento)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickupAddress, destinationAddress]
+              properties:
+                pickupAddress: { type: string }
+                destinationAddress: { type: string }
+                pickupLat: { type: number }
+                pickupLng: { type: number }
+                destinationLat: { type: number }
+                destinationLng: { type: number }
+                cost_center_id: { type: string, format: uuid, description: "Opcional; obrigatório se usuário tiver mais de um centro de custo" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  distanceKm: { type: number }
+                  durationMin: { type: integer }
+                  estimatedPriceCents: { type: integer }
+                  formattedPrice: { type: string }
+        '400': { description: Dados inválidos ou centro de custo não informado }
+        '403': { description: Restrição do centro de custo }
+
+  /rides:
+    post:
+      tags: [Rides]
+      summary: Solicitação de corrida
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickupAddress, destinationAddress, estimatedPriceCents]
+              properties:
+                pickupAddress: { type: string }
+                destinationAddress: { type: string }
+                estimatedPriceCents: { type: integer }
+                estimatedDistanceKm: { type: number }
+                estimatedDurationMin: { type: integer }
+                pickupLat: { type: number }
+                pickupLng: { type: number }
+                destinationLat: { type: number }
+                destinationLng: { type: number }
+                cost_center_id: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Corrida criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, example: requested }
+                  pickupAddress: { type: string }
+                  destinationAddress: { type: string }
+                  estimatedPriceCents: { type: integer }
+                  formattedPrice: { type: string }
+        '400': { description: Dados inválidos }
+        '403': { description: Restrição do centro de custo }
+    get:
+      tags: [Rides]
+      summary: Lista corridas
+      description: |
+        Gestor Central: todas. Motorista: ?available=1 = disponíveis (requested); sem parâmetro = minhas corridas.
+        Outros: apenas as que solicitei.
+      parameters:
+        - name: available
+          in: query
+          schema: { type: string, enum: ['1'] }
+          description: Para motorista; 1 = só status requested
+      responses:
+        '200':
+          description: Lista de corridas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RideListItem' }
+
+  /rides/{id}:
+    get:
+      tags: [Rides]
+      summary: Detalhe da corrida
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Detalhe completo da corrida }
+        '403': { description: Acesso negado }
+        '404': { description: Corrida não encontrada }
+    patch:
+      tags: [Rides]
+      summary: Transições (aceitar, chegada, iniciar, finalizar, cancelar)
+      description: |
+        PATCH /rides/{id}/accept — motorista aceita (body: vehiclePlate opcional)
+        PATCH /rides/{id}/arrived — motorista chegou na origem
+        PATCH /rides/{id}/start — motorista inicia viagem
+        PATCH /rides/{id}/complete — motorista finaliza (body: actualPriceCents, actualDistanceKm?, actualDurationMin?)
+        PATCH /rides/{id}/cancel — solicitante ou motorista cancela (body: reason opcional)
+
+  /rides/{id}/receipt:
+    get:
+      tags: [Rides]
+      summary: Recibo da corrida
+      description: Disponível apenas para corridas com status completed. Acesso: solicitante, motorista ou gestor central.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Recibo (endereços, motorista, veículo, datas, valor final, distância, avaliação)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  pickupAddress: { type: string }
+                  destinationAddress: { type: string }
+                  driverName: { type: string }
+                  vehiclePlate: { type: string }
+                  startedAt: { type: string, format: date-time }
+                  completedAt: { type: string, format: date-time }
+                  actualPriceCents: { type: integer }
+                  formattedPrice: { type: string }
+                  actualDistanceKm: { type: number }
+                  actualDurationMin: { type: integer }
+                  rating: { type: integer, minimum: 1, maximum: 5 }
+        '400': { description: Corrida não finalizada }
+        '403': { description: Acesso negado }
+        '404': { description: Corrida não encontrada }
+
+  /rides/{id}/rate:
+    post:
+      tags: [Rides]
+      summary: Avaliação da corrida
+      description: Apenas solicitante; corrida deve estar completed. Body: { "rating": 1 a 5 }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        '200': { description: Avaliação registrada }
+        '404': { description: Corrida não encontrada ou já avaliada }
+
+  /rides/{id}/messages:
+    get:
+      tags: [Rides]
+      summary: Lista mensagens da corrida
+      description: Comunicação usuário–motorista. Acesso: solicitante, motorista ou gestor central.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista de mensagens (id, userId, userName, text, createdAt)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    rideId: { type: string, format: uuid }
+                    userId: { type: string, format: uuid }
+                    userName: { type: string }
+                    text: { type: string }
+                    createdAt: { type: string, format: date-time }
+    post:
+      tags: [Rides]
+      summary: Envia mensagem na corrida
+      description: Apenas solicitante ou motorista da corrida.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '201': { description: Mensagem criada }
+        '403': { description: Apenas solicitante ou motorista podem enviar }
+
+  /units:
+    get:
+      tags: [Units]
+      summary: Lista unidades
+      responses:
+        '200': { description: Lista de units }
+    post:
+      tags: [Units]
+      summary: Cria unidade
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201': { description: Unidade criada }
+  /units/{id}:
+    get:
+      tags: [Units]
+      summary: Detalhe da unidade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+    patch:
+      tags: [Units]
+      summary: Atualiza unidade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [Units]
+      summary: Exclui unidade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Excluído }
+
+  /cost-centers:
+    get:
+      tags: [Cost centers]
+      summary: Lista centros de custo
+      parameters:
+        - name: unitId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Lista de centros de custo }
+    post:
+      tags: [Cost centers]
+      summary: Cria centro de custo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unitId, name]
+              properties:
+                unitId: { type: string, format: uuid }
+                name: { type: string }
+      responses:
+        '201': { description: Centro de custo criado }
+  /cost-centers/{id}:
+    get:
+      tags: [Cost centers]
+      summary: Detalhe do centro de custo (inclui allowedAreas)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+    patch:
+      tags: [Cost centers]
+      summary: Atualiza centro de custo (nome, restrições)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                unitId: { type: string, format: uuid }
+                blocked: { type: boolean }
+                monthlyLimitCents: { type: integer }
+                maxKm: { type: number }
+                allowedTimeStart: { type: string }
+                allowedTimeEnd: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [Cost centers]
+      summary: Exclui centro de custo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Excluído }
+  /cost-centers/{id}/areas:
+    post:
+      tags: [Cost centers]
+      summary: Adiciona área permitida (origem/destino)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, lat, lng]
+              properties:
+                type: { type: string, enum: [origin, destination] }
+                lat: { type: number }
+                lng: { type: number }
+                radiusKm: { type: number }
+                label: { type: string }
+      responses:
+        '201': { description: Área criada }
+  /cost-centers/{id}/areas/{areaId}:
+    delete:
+      tags: [Cost centers]
+      summary: Remove área permitida
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: areaId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Removido }
+
+  /request-reasons:
+    get:
+      tags: [Request reasons]
+      summary: Lista motivos de solicitação
+      responses:
+        '200': { description: Lista }
+    post:
+      tags: [Request reasons]
+      summary: Cria motivo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201': { description: Criado }
+  /request-reasons/{id}:
+    patch:
+      tags: [Request reasons]
+      summary: Atualiza motivo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [Request reasons]
+      summary: Exclui motivo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Excluído }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Lista usuários
+      responses:
+        '200': { description: Lista (Gestor Central: todos; Gestor Unidade: âmbito dos seus centros) }
+    post:
+      tags: [Users]
+      summary: Cria usuário (Gestor Central)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name, profile]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                name: { type: string }
+                profile: { type: string, enum: [gestor_central, gestor_unidade, usuario, motorista] }
+                costCenterIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '201': { description: Usuário criado }
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Detalhe do usuário
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: OK }
+    patch:
+      tags: [Users]
+      summary: Atualiza usuário
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                profile: { type: string }
+                costCenterIds: { type: array, items: { type: string, format: uuid } }
+                password: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /reports/rides:
+    get:
+      tags: [Reports]
+      summary: Relatório de corridas
+      description: Filtros por perfil. Gestor Unidade: apenas seus centros de custo. Retorno JSON para exportação (CSV/XML/XLS no cliente).
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+          description: Data início (ISO 8601)
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+          description: Data fim (ISO 8601)
+        - name: costCenterId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: unitId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Lista de corridas com unit, centro de custo, solicitante, motorista, etc. }
+  /reports/cadastrais:
+    get:
+      tags: [Reports]
+      summary: Relatório cadastral
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [units, cost_centers, users, request_reasons]
+      responses:
+        '200': { description: Lista conforme type }

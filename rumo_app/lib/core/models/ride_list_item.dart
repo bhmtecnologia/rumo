@@ -13,6 +13,8 @@ class RideListItem {
   final int estimatedPriceCents;
   final String formattedPrice;
   final DateTime? createdAt;
+  final String? driverName;
+  final String? vehiclePlate;
 
   const RideListItem({
     required this.id,
@@ -28,6 +30,8 @@ class RideListItem {
     required this.estimatedPriceCents,
     required this.formattedPrice,
     this.createdAt,
+    this.driverName,
+    this.vehiclePlate,
   });
 
   factory RideListItem.fromJson(Map<String, dynamic> json) {
@@ -47,6 +51,8 @@ class RideListItem {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
           : (json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null),
+      driverName: json['driverName'] as String?,
+      vehiclePlate: json['vehiclePlate'] as String?,
     );
   }
 

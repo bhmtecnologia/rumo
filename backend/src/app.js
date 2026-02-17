@@ -6,6 +6,7 @@ import unitsRouter from './routes/units.js';
 import costCentersRouter from './routes/costCenters.js';
 import requestReasonsRouter from './routes/requestReasons.js';
 import usersRouter from './routes/users.js';
+import reportsRouter from './routes/reports.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 const app = express();
@@ -15,6 +16,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRouter);
 app.use('/api/rides', requireAuth, ridesRouter);
+app.use('/api/reports', requireAuth, reportsRouter);
 app.use('/api/units', unitsRouter);
 app.use('/api/cost-centers', costCentersRouter);
 app.use('/api/request-reasons', requestReasonsRouter);

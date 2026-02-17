@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { logAudit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireProfile } from '../middleware/requireAuth.js';
 import { isGestorCentral } from '../lib/auth.js';
@@ -69,6 +70,7 @@ router.post('/', requireProfile('gestor_central'), async (req, res) => {
       [name.trim()]
     );
     const row = insert.rows[0];
+    await logAudit('unit_created', req.user.id, 'unit', row.id, { name: row.name });
     return res.status(201).json({
       id: row.id,
       name: row.name,
@@ -135,6 +137,7 @@ router.patch('/:id', requireProfile('gestor_central'), async (req, res) => {
       return res.status(404).json({ error: 'Unidade não encontrada' });
     }
     const row = r.rows[0];
+    await logAudit('unit_updated', req.user.id, 'unit', id, { name: row.name });
     return res.json({
       id: row.id,
       name: row.name,
@@ -158,6 +161,7 @@ router.delete('/:id', requireProfile('gestor_central'), async (req, res) => {
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Unidade não encontrada' });
     }
+    await logAudit('unit_deleted', req.user.id, 'unit', id, {});
     return res.status(204).send();
   } catch (err) {
     console.error('Delete unit error:', err);

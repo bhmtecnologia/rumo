@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { logAudit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireProfile } from '../middleware/requireAuth.js';
 
@@ -44,6 +45,7 @@ router.post('/', requireProfile('gestor_central'), async (req, res) => {
       [name.trim()]
     );
     const row = insert.rows[0];
+    await logAudit('request_reason_created', req.user.id, 'request_reason', row.id, { name: row.name });
     return res.status(201).json({
       id: row.id,
       name: row.name,
@@ -75,6 +77,7 @@ router.patch('/:id', requireProfile('gestor_central'), async (req, res) => {
       return res.status(404).json({ error: 'Motivo não encontrado' });
     }
     const row = r.rows[0];
+    await logAudit('request_reason_updated', req.user.id, 'request_reason', id, { name: row.name });
     return res.json({
       id: row.id,
       name: row.name,
@@ -98,6 +101,7 @@ router.delete('/:id', requireProfile('gestor_central'), async (req, res) => {
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Motivo não encontrado' });
     }
+    await logAudit('request_reason_deleted', req.user.id, 'request_reason', id, {});
     return res.status(204).send();
   } catch (err) {
     console.error('Delete request reason error:', err);

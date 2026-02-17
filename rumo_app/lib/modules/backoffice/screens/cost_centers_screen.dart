@@ -5,6 +5,8 @@ import 'package:rumo_app/core/models/unit.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/auth_service.dart';
 
+import 'cost_center_restrictions_screen.dart';
+
 class CostCentersScreen extends StatefulWidget {
   const CostCentersScreen({super.key});
 
@@ -99,11 +101,12 @@ class _CostCentersScreenState extends State<CostCentersScreen> {
     if (ok != true || !mounted || selectedUnitId == null) return;
     final name = nameController.text.trim();
     if (name.isEmpty) return;
+    final unitId = selectedUnitId!;
     try {
       if (cc == null) {
-        await _api.createCostCenter(selectedUnitId, name);
+        await _api.createCostCenter(unitId, name);
       } else {
-        await _api.updateCostCenter(cc.id, name, unitId: selectedUnitId);
+        await _api.updateCostCenter(cc.id, name: name, unitId: unitId);
       }
       if (mounted) _load();
     } catch (e) {
@@ -220,18 +223,25 @@ class _CostCentersScreenState extends State<CostCentersScreen> {
                                     cc.unitName ?? cc.unitId,
                                     style: TextStyle(color: Colors.grey[400], fontSize: 12),
                                   ),
-                                  trailing: AuthService().currentUser?.isGestorCentral == true
-                                      ? PopupMenuButton<String>(
-                                          onSelected: (v) {
-                                            if (v == 'edit') _showForm(cc);
-                                            if (v == 'delete') _confirmDelete(cc);
-                                          },
-                                          itemBuilder: (_) => [
-                                            const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                                            const PopupMenuItem(value: 'delete', child: Text('Excluir')),
-                                          ],
-                                        )
-                                      : null,
+                                  trailing: PopupMenuButton<String>(
+                                      onSelected: (v) {
+                                        if (v == 'edit') _showForm(cc);
+                                        if (v == 'restrictions') {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => CostCenterRestrictionsScreen(costCenterId: cc.id),
+                                            ),
+                                          );
+                                        }
+                                        if (v == 'delete') _confirmDelete(cc);
+                                      },
+                                      itemBuilder: (_) => [
+                                        const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                                        const PopupMenuItem(value: 'restrictions', child: Text('Restrições')),
+                                        if (AuthService().currentUser?.isGestorCentral == true)
+                                          const PopupMenuItem(value: 'delete', child: Text('Excluir')),
+                                      ],
+                                    ),
                                 ),
                               );
                             },

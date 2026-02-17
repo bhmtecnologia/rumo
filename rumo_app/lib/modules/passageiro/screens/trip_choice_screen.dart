@@ -13,6 +13,7 @@ class TripChoiceScreen extends StatefulWidget {
   final String destinationAddress;
   final LatLng? pickupCoords;
   final LatLng? destinationCoords;
+  final String? costCenterId;
 
   const TripChoiceScreen({
     super.key,
@@ -21,6 +22,7 @@ class TripChoiceScreen extends StatefulWidget {
     required this.destinationAddress,
     this.pickupCoords,
     this.destinationCoords,
+    this.costCenterId,
   });
 
   @override
@@ -45,6 +47,7 @@ class _TripChoiceScreenState extends State<TripChoiceScreen> {
         pickupLng: widget.pickupCoords?.longitude,
         destinationLat: widget.destinationCoords?.latitude,
         destinationLng: widget.destinationCoords?.longitude,
+        costCenterId: widget.costCenterId,
       );
       if (!context.mounted) return;
       setState(() => _requesting = false);

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:rumo_app/core/models/cost_center.dart';
 import 'package:rumo_app/core/services/api_service.dart';
+import 'package:rumo_app/core/services/auth_service.dart';
 import 'package:rumo_app/core/services/nominatim_service.dart';
 
 import 'trip_choice_screen.dart';
@@ -31,6 +33,8 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   final _api = ApiService();
   List<NominatimResult> _searchResults = [];
   bool _showSearchResults = false;
+  List<CostCenter> _userCostCenters = [];
+  String? _selectedCostCenterId;
 
   /// Sugestões com coordenadas reais quando disponível (lat, lng).
   static const _suggestions = [
@@ -44,6 +48,23 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   void initState() {
     super.initState();
     _getLocation();
+    _loadUserCostCenters();
+  }
+
+  Future<void> _loadUserCostCenters() async {
+    final ids = AuthService().currentUser?.costCenterIds ?? [];
+    if (ids.isEmpty) return;
+    try {
+      final list = await _api.listCostCenters();
+      if (!mounted) return;
+      final filtered = list.where((c) => ids.contains(c.id)).toList();
+      setState(() {
+        _userCostCenters = filtered;
+        if (_selectedCostCenterId == null && filtered.isNotEmpty) {
+          _selectedCostCenterId = filtered.first.id;
+        }
+      });
+    } catch (_) {}
   }
 
   @override
@@ -137,6 +158,13 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     return out;
   }
 
+  String? _resolveCostCenterId() {
+    final ids = AuthService().currentUser?.costCenterIds ?? [];
+    if (ids.isEmpty) return null;
+    if (ids.length == 1) return ids.single;
+    return _selectedCostCenterId;
+  }
+
   void _selectDestination(String address, LatLng coords) {
     _destinationController.text = address;
     setState(() {
@@ -159,6 +187,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
       _error = null;
       _loading = true;
     });
+    final costCenterId = _resolveCostCenterId();
     try {
       final estimate = await _api.getEstimate(
         pickupAddress: pickup,
@@ -167,6 +196,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
         pickupLng: _pickupCoords?.longitude,
         destinationLat: _destinationCoords?.latitude,
         destinationLng: _destinationCoords?.longitude,
+        costCenterId: costCenterId,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -177,6 +207,7 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
             destinationAddress: dest,
             pickupCoords: _pickupCoords,
             destinationCoords: _destinationCoords,
+            costCenterId: costCenterId,
           ),
         ),
       );
@@ -250,6 +281,21 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
                       child: Text(
                         _locationError!,
                         style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ),
+                  if (_userCostCenters.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedCostCenterId,
+                        decoration: const InputDecoration(
+                          labelText: 'Centro de custo',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _userCostCenters
+                            .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedCostCenterId = v),
                       ),
                     ),
                   const SizedBox(height: 8),
