@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { getSupabase, useSupabase } from '../db/supabase.js';
 import { hashPassword, verifyPassword, signToken } from '../lib/auth.js';
 import { logAudit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -19,15 +20,42 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
     }
 
-    const r = await pool.query(
-      'SELECT id, email, name, profile, password_hash FROM users WHERE LOWER(email) = LOWER($1)',
-      [email.trim()]
-    );
-    if (r.rows.length === 0) {
-      return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+    const emailNorm = email.trim().toLowerCase();
+    let user = null;
+    let costCenterIds = [];
+
+    if (useSupabase()) {
+      const supabase = getSupabase();
+      const { data: users, error: userError } = await supabase
+        .from('users')
+        .select('id, email, name, profile, password_hash')
+        .eq('email', emailNorm)
+        .limit(1);
+      if (userError || !users?.length) {
+        return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      }
+      user = users[0];
+      const { data: ccRows } = await supabase
+        .from('user_cost_centers')
+        .select('cost_center_id')
+        .eq('user_id', user.id);
+      costCenterIds = (ccRows || []).map((r) => r.cost_center_id);
+    } else {
+      const r = await pool.query(
+        'SELECT id, email, name, profile, password_hash FROM users WHERE LOWER(email) = LOWER($1)',
+        [email.trim()]
+      );
+      if (r.rows.length === 0) {
+        return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      }
+      user = r.rows[0];
+      const ccRows = await pool.query(
+        'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
+        [user.id]
+      );
+      costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
     }
 
-    const user = r.rows[0];
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
@@ -39,12 +67,6 @@ router.post('/login', async (req, res) => {
       name: user.name,
       profile: user.profile,
     });
-
-    const ccRows = await pool.query(
-      'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
-      [user.id]
-    );
-    const costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
     await logAudit('auth_login', user.id, 'user', user.id, { email: user.email });
     return res.json({
       token,
@@ -69,19 +91,42 @@ router.post('/login', async (req, res) => {
  */
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const r = await pool.query(
-      'SELECT id, email, name, profile FROM users WHERE id = $1',
-      [req.user.id]
-    );
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
+    let row = null;
+    let costCenterIds = [];
+
+    if (useSupabase()) {
+      const supabase = getSupabase();
+      const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('id, email, name, profile')
+        .eq('id', req.user.id)
+        .limit(1)
+        .maybeSingle();
+      if (userError || !userRow) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      row = userRow;
+      const { data: ccRows } = await supabase
+        .from('user_cost_centers')
+        .select('cost_center_id')
+        .eq('user_id', row.id);
+      costCenterIds = (ccRows || []).map((r) => r.cost_center_id);
+    } else {
+      const r = await pool.query(
+        'SELECT id, email, name, profile FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      if (r.rows.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      row = r.rows[0];
+      const ccRows = await pool.query(
+        'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
+        [row.id]
+      );
+      costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
     }
-    const row = r.rows[0];
-    const ccRows = await pool.query(
-      'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
-      [row.id]
-    );
-    const costCenterIds = ccRows.rows.map((r) => r.cost_center_id);
+
     return res.json({
       user: {
         id: row.id,
@@ -111,20 +156,42 @@ router.post('/change-password', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'A nova senha deve ter no mínimo 6 caracteres' });
     }
 
-    const r = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
+    let passwordHash = null;
+    if (useSupabase()) {
+      const { data, error } = await getSupabase()
+        .from('users')
+        .select('password_hash')
+        .eq('id', req.user.id)
+        .limit(1)
+        .maybeSingle();
+      if (error || !data) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      passwordHash = data.password_hash;
+    } else {
+      const r = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+      if (r.rows.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      passwordHash = r.rows[0].password_hash;
     }
-    const valid = await verifyPassword(currentPassword, r.rows[0].password_hash);
+    const valid = await verifyPassword(currentPassword, passwordHash);
     if (!valid) {
       return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
     const newHash = await hashPassword(newPassword);
-    await pool.query(
-      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [newHash, req.user.id]
-    );
+    if (useSupabase()) {
+      await getSupabase()
+        .from('users')
+        .update({ password_hash: newHash, updated_at: new Date().toISOString() })
+        .eq('id', req.user.id);
+    } else {
+      await pool.query(
+        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+        [newHash, req.user.id]
+      );
+    }
     await logAudit('auth_password_changed', req.user.id, 'user', req.user.id, {});
     return res.json({ ok: true, message: 'Senha alterada com sucesso' });
   } catch (err) {
@@ -145,28 +212,49 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'E-mail é obrigatório' });
     }
 
-    const r = await pool.query('SELECT id, name FROM users WHERE LOWER(email) = LOWER($1)', [
-      email.trim(),
-    ]);
-    // Não revelar se o e-mail existe ou não (segurança)
-    if (r.rows.length === 0) {
+    const emailNorm = email.trim().toLowerCase();
+    let user = null;
+    if (useSupabase()) {
+      const { data } = await getSupabase()
+        .from('users')
+        .select('id, name')
+        .ilike('email', emailNorm)
+        .limit(1)
+        .maybeSingle();
+      user = data;
+    } else {
+      const r = await pool.query('SELECT id, name FROM users WHERE LOWER(email) = LOWER($1)', [
+        email.trim(),
+      ]);
+      user = r.rows[0] ?? null;
+    }
+    if (!user) {
       return res.json({
         ok: true,
         message: 'Se este e-mail estiver cadastrado, você receberá instruções para redefinir a senha.',
       });
     }
 
-    const user = r.rows[0];
     const rawToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hora
 
-    await pool.query(
-      'UPDATE users SET reset_token = $1, reset_token_expires_at = $2, updated_at = NOW() WHERE id = $3',
-      [hashedToken, expiresAt, user.id]
-    );
+    if (useSupabase()) {
+      await getSupabase()
+        .from('users')
+        .update({
+          reset_token: hashedToken,
+          reset_token_expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+    } else {
+      await pool.query(
+        'UPDATE users SET reset_token = $1, reset_token_expires_at = $2, updated_at = NOW() WHERE id = $3',
+        [hashedToken, expiresAt, user.id]
+      );
+    }
 
-    // TODO: integrar com serviço de e-mail (SendGrid, SES, etc.). Por ora apenas log.
     const resetLink = `${process.env.APP_URL || 'http://localhost:3001'}/reset-password?token=${rawToken}`;
     console.log('[forgot-password] Reset link for', user.id, ':', resetLink);
 
@@ -196,20 +284,48 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const r = await pool.query(
-      'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()',
-      [hashedToken]
-    );
-    if (r.rows.length === 0) {
-      return res.status(400).json({ error: 'Token inválido ou expirado' });
+    const now = new Date().toISOString();
+    let userId = null;
+    if (useSupabase()) {
+      const { data, error } = await getSupabase()
+        .from('users')
+        .select('id')
+        .eq('reset_token', hashedToken)
+        .gt('reset_token_expires_at', now)
+        .limit(1)
+        .maybeSingle();
+      if (error || !data) {
+        return res.status(400).json({ error: 'Token inválido ou expirado' });
+      }
+      userId = data.id;
+    } else {
+      const r = await pool.query(
+        'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()',
+        [hashedToken]
+      );
+      if (r.rows.length === 0) {
+        return res.status(400).json({ error: 'Token inválido ou expirado' });
+      }
+      userId = r.rows[0].id;
     }
 
-    const userId = r.rows[0].id;
     const newHash = await hashPassword(newPassword);
-    await pool.query(
-      'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires_at = NULL, updated_at = NOW() WHERE id = $2',
-      [newHash, userId]
-    );
+    if (useSupabase()) {
+      await getSupabase()
+        .from('users')
+        .update({
+          password_hash: newHash,
+          reset_token: null,
+          reset_token_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+    } else {
+      await pool.query(
+        'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires_at = NULL, updated_at = NOW() WHERE id = $2',
+        [newHash, userId]
+      );
+    }
     await logAudit('auth_password_reset', userId, 'user', userId, {});
     return res.json({ ok: true, message: 'Senha redefinida com sucesso' });
   } catch (err) {
@@ -241,14 +357,36 @@ router.post('/register', async (req, res) => {
 
     const emailNorm = email.trim().toLowerCase();
     const passwordHash = await hashPassword(password);
+    let user = null;
 
-    const insert = await pool.query(
-      `INSERT INTO users (email, password_hash, name, profile)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, email, name, profile, created_at`,
-      [emailNorm, passwordHash, name.trim(), profile]
-    );
-    const user = insert.rows[0];
+    if (useSupabase()) {
+      const { data, error } = await getSupabase()
+        .from('users')
+        .insert({
+          email: emailNorm,
+          password_hash: passwordHash,
+          name: name.trim(),
+          profile,
+        })
+        .select('id, email, name, profile, created_at')
+        .single();
+      if (error) {
+        if (error.code === '23505') {
+          return res.status(409).json({ error: 'Este e-mail já está cadastrado' });
+        }
+        throw error;
+      }
+      user = data;
+    } else {
+      const insert = await pool.query(
+        `INSERT INTO users (email, password_hash, name, profile)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, email, name, profile, created_at`,
+        [emailNorm, passwordHash, name.trim(), profile]
+      );
+      user = insert.rows[0];
+    }
+
     const token = signToken({
       id: user.id,
       email: user.email,
