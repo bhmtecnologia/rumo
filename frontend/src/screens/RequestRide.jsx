@@ -261,13 +261,15 @@ export function RequestRide({ onRideRequested, onBack }) {
           </p>
         )}
         <div className={styles.mapSection}>
-          <RideMap
-            pickup={pickupCoords}
-            destination={destinationCoords}
-            userLocation={userLocation}
-            onMapClick={handleMapPick}
-            mapPickerActive={mapPickerMode !== null}
-          />
+          {!loading && (
+            <RideMap
+              pickup={pickupCoords}
+              destination={destinationCoords}
+              userLocation={userLocation}
+              onMapClick={handleMapPick}
+              mapPickerActive={mapPickerMode !== null}
+            />
+          )}
         </div>
 
         <div className={styles.cardRoute}>

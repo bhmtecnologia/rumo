@@ -108,6 +108,7 @@
 
 .mapSection {
   width: 100%;
+  min-height: 220px;
   margin-bottom: 16px;
 }
 
