@@ -6,6 +6,10 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
+import 'package:rumo_app/modules/backoffice/screens/cost_centers_screen.dart';
+import 'package:rumo_app/modules/backoffice/screens/request_reasons_screen.dart';
+import 'package:rumo_app/modules/backoffice/screens/units_screen.dart';
+import 'package:rumo_app/modules/backoffice/screens/users_screen.dart';
 
 /// Central do backoffice: mapa com corridas solicitadas, usuários por localidade, tempo (SLA), motoristas parceiros.
 class BackofficeHomeScreen extends StatefulWidget {
@@ -61,6 +65,66 @@ class _BackofficeHomeScreenState extends State<BackofficeHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF1A1A1A),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Color(0xFF2C2C2C)),
+              child: Text(
+                'Backoffice Rumo',
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dashboard, color: Colors.white70),
+              title: const Text('Central', style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            ListTile(
+              leading: const Icon(Icons.business, color: Colors.white70),
+              title: const Text('Units', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UnitsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.account_balance, color: Colors.white70),
+              title: const Text('Centros de custo', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CostCentersScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.label, color: Colors.white70),
+              title: const Text('Motivos de solicitação', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const RequestReasonsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.people, color: Colors.white70),
+              title: const Text('Usuários', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UsersScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text('Central Rumo'),
@@ -69,6 +133,10 @@ class _BackofficeHomeScreenState extends State<BackofficeHomeScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
           if (_loading)
             const Padding(
               padding: EdgeInsets.only(right: 12),

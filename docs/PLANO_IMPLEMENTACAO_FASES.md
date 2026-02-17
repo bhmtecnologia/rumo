@@ -10,7 +10,7 @@ Com base no **Anexo C (Especificações Técnicas)** e **Anexo D (Relatórios)**
 |------|----------------------|
 | **Backend** | Node/Express, Postgres (Supabase). Tabelas: `rides`, `fare_config`. Endpoints: `POST /api/rides/estimate`, `POST /api/rides`, `GET /api/rides`, `GET /api/rides/:id`. |
 | **Flutter** | App com 3 módulos: **Passageiro** (home, escolher viagem, solicitar corrida), **Motorista** (placeholder), **Backoffice** (mapa + lista de corridas). |
-| **Não existe** | Autenticação, órgãos/centros de custo, perfis de acesso, fluxo completo da corrida (aceite, chegada, início, fim), restrições, relatórios, API de integração. |
+| **Não existe** | Autenticação, units/centros de custo, perfis de acesso, fluxo completo da corrida (aceite, chegada, início, fim), restrições, relatórios, API de integração. |
 
 ---
 
@@ -45,17 +45,17 @@ Com base no **Anexo C (Especificações Técnicas)** e **Anexo D (Relatórios)**
 
 | Item | Especificação | Implementação |
 |------|----------------|----------------|
-| Órgãos e entidades | Cadastramento de órgãos e entidades | Tabela `organs` (ou equivalente); CRUD na web. |
-| Centros de custo | Unidades administrativas vinculadas a órgão | Tabela `cost_centers` com FK para órgão; CRUD na web. |
-| Usuários e perfis | Cadastro com perfis diferenciados | Ampliar usuários: perfil, órgão, centro(s) de custo; telas de cadastro/edição. |
+| Units (unidades) | Cadastramento de unidades (órgãos/entidades) | Tabela `units`; CRUD na web. |
+| Centros de custo | Unidades administrativas vinculadas a uma unit | Tabela `cost_centers` com FK para `units`; CRUD na web. |
+| Usuários e perfis | Cadastro com perfis diferenciados | Ampliar: perfil, vínculo(s) a centro(s) de custo (N:N); telas de cadastro/edição. |
 | Motivos de solicitação | Cadastramento de motivos | Tabela `request_reasons`; CRUD na web. |
 
 **Entregáveis:**  
-- Telas web: Órgãos, Centros de custo, Usuários, Motivos de solicitação.  
+- Telas web: Units, Centros de custo, Usuários, Motivos de solicitação.  
 - APIs correspondentes (CRUD) com checagem de perfil (Gestor Central vs Gestor Unidade).
 
 **Ordem sugerida:**  
-1) Migrações: órgãos, centros de custo, motivos, vínculos usuário–centro de custo; 2) APIs; 3) Telas no backoffice/web.
+1) Migrações: units, cost_centers, request_reasons, user_cost_centers; 2) APIs; 3) Telas no backoffice/web.
 
 ---
 
@@ -147,8 +147,8 @@ Incluir timestamps: solicitação, aceite, chegada na origem, início da corrida
 |------|----------------|----------------|
 | Gestor Central | Acesso a todos os centros de custo e dados | Filtros e listagens sem restrição de centro. |
 | Gestor Unidade | Apenas seu(s) centro(s) de custo | Filtro por centro de custo vinculado ao usuário. |
-| Relatórios de corridas | Dados do Anexo D (identificador, orçamento, órgão/unidade, usuário, endereços, motivo, datas, motorista, veículo, categoria, trajeto, distância, valores, ateste, avaliação, etc.) | Consulta + exportação XLS/CSV/XML. |
-| Relatórios cadastrais | Órgãos, unidades, perfis, status, dados dos cadastros | Telas de consulta + exportação. |
+| Relatórios de corridas | Dados do Anexo D (identificador, orçamento, unit/centro de custo, usuário, endereços, motivo, datas, motorista, veículo, categoria, trajeto, distância, valores, ateste, avaliação, etc.) | Consulta + exportação XLS/CSV/XML. |
+| Relatórios cadastrais | Units, centros de custo, perfis, status, dados dos cadastros | Telas de consulta + exportação. |
 | Histórico em tempo real | Visualização do histórico de corridas em tempo real | Listagem/atualização contínua (polling ou WS). |
 
 **Entregáveis:**  
@@ -231,8 +231,16 @@ Implementado:
 
 ---
 
+## Fase 2 – Concluída (units em vez de órgãos)
+
+Implementado:
+
+- **Documentação:** Plano atualizado para usar **units** (unidades) em vez de órgãos/entidades.
+- **Backend:** Tabelas `units`, `cost_centers` (unit_id), `user_cost_centers` (N:N), `request_reasons`. Rotas: `GET/POST/PATCH/DELETE /api/units`, `GET/POST/PATCH/DELETE /api/cost-centers`, `GET/POST/PATCH/DELETE /api/request-reasons`, `GET/POST/PATCH /api/users` (e `GET /api/users/:id`). Gestor Central: acesso total. Gestor Unidade: vê apenas units/centros de custo/usuários vinculados aos seus centros de custo.
+- **Flutter backoffice:** Drawer no Central com: Central, Units, Centros de custo, Motivos de solicitação, Usuários. Telas de listagem e CRUD (formulários em dialog) para cada cadastro. FAB e editar/excluir apenas para Gestor Central (exceto usuários: Gestor Central edita todos).
+
+---
+
 ## Próximo passo sugerido
 
-Iniciar pela **Fase 2 – Cadastros base**: modelo de usuário e perfis no banco, API de login e proteção de rotas, e telas de login no app e na web. Em seguida, Fase 2 (cadastros) e Fase 3 (restrições) para que as corridas possam ser parametrizadas por centro de custo e perfil antes de fechar o fluxo completo (Fase 4).
-
-Se quiser, na próxima mensagem podemos detalhar a Fase 1 em tarefas técnicas (tabelas, endpoints e telas) e começar a implementação.
+Iniciar pela **Fase 3 – Limites e restrições** ou **Fase 4 – Fluxo completo da corrida**, conforme prioridade.
