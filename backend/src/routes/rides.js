@@ -329,9 +329,30 @@ router.get('/', async (req, res) => {
     const isCentral = user && isGestorCentral(user);
     const isUnidade = user && isGestorUnidade(user);
     const isDriver = user && isMotorista(user);
+
+    if (useSupabase()) {
+      const supabase = getSupabase();
+      let q = supabase.from('rides').select('*').order('created_at', { ascending: false });
+      if (isCentral || isUnidade) {
+        q = q.limit(100);
+      } else if (isDriver && req.query.available === '1') {
+        q = q.eq('status', 'requested').limit(50);
+      } else if (isDriver) {
+        q = q.or(`driver_user_id.eq.${user.id},requested_by_user_id.eq.${user.id}`).limit(100);
+      } else {
+        q = q.eq('requested_by_user_id', user.id).limit(100);
+      }
+      const { data: rows, error } = await q;
+      if (error) {
+        console.error('List rides Supabase error:', error);
+        return res.status(500).json({ error: 'Erro ao listar corridas' });
+      }
+      const rides = (rows || []).map((row) => mapRideRow(row));
+      return res.json(rides);
+    }
+
     let query;
     let params = [];
-
     if (isCentral || isUnidade) {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides ORDER BY created_at DESC LIMIT 100`;
     } else if (isDriver && req.query.available === '1') {
@@ -343,7 +364,6 @@ router.get('/', async (req, res) => {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
       params = [user.id];
     }
-
     const r = await pool.query(query, params);
     const rides = r.rows.map((row) => mapRideRow(row));
     return res.json(rides);
@@ -643,18 +663,25 @@ router.post('/:id/messages', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query(
-      `SELECT * FROM rides WHERE id = $1`,
-      [id]
-    );
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: 'Corrida não encontrada' });
+    let row;
+    if (useSupabase()) {
+      const { data, error } = await getSupabase().from('rides').select('*').eq('id', id).single();
+      if (error || !data) {
+        return res.status(404).json({ error: 'Corrida não encontrada' });
+      }
+      row = data;
+    } else {
+      const r = await pool.query(`SELECT * FROM rides WHERE id = $1`, [id]);
+      if (r.rows.length === 0) {
+        return res.status(404).json({ error: 'Corrida não encontrada' });
+      }
+      row = r.rows[0];
     }
-    const row = r.rows[0];
     const isCentral = isGestorCentral(req.user);
+    const isUnidade = isGestorUnidade(req.user);
     const isRequester = row.requested_by_user_id === req.user.id;
     const isDriver = row.driver_user_id === req.user.id;
-    if (!isCentral && !isRequester && !isDriver) {
+    if (!isCentral && !isUnidade && !isRequester && !isDriver) {
       return res.status(403).json({ error: 'Acesso negado a esta corrida.' });
     }
     return res.json(mapRideRow(row));
