@@ -332,13 +332,13 @@ router.get('/', async (req, res) => {
     let query;
     let params = [];
 
-    if (isDriver && req.query.available === '1') {
+    if (isCentral || isUnidade) {
+      query = `SELECT ${RIDE_LIST_COLS} FROM rides ORDER BY created_at DESC LIMIT 100`;
+    } else if (isDriver && req.query.available === '1') {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE status = 'requested' ORDER BY created_at DESC LIMIT 50`;
     } else if (isDriver) {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE driver_user_id = $1 OR requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
       params = [user.id, user.id];
-    } else if (isCentral || isUnidade) {
-      query = `SELECT ${RIDE_LIST_COLS} FROM rides ORDER BY created_at DESC LIMIT 100`;
     } else {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
       params = [user.id];
