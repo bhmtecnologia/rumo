@@ -240,31 +240,57 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const insert = await pool.query(
-      `INSERT INTO rides (
-        pickup_address, pickup_lat, pickup_lng,
-        destination_address, destination_lat, destination_lng,
-        estimated_distance_km, estimated_duration_min, estimated_price_cents,
-        status, requested_by_user_id, cost_center_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'requested', $10, $11)
-      RETURNING id, pickup_address, destination_address, estimated_price_cents,
-                estimated_distance_km, estimated_duration_min, status, created_at`,
-      [
-        pickupAddress,
-        pickupLat ?? null,
-        pickupLng ?? null,
-        destinationAddress,
-        destinationLat ?? null,
-        destinationLng ?? null,
-        distanceKm,
-        durationMin,
-        price,
-        userId,
-        costCenterId ?? null,
-      ]
-    );
-
-    const ride = insert.rows[0];
+    let ride = null;
+    if (useSupabase()) {
+      const { data, error } = await getSupabase()
+        .from('rides')
+        .insert({
+          pickup_address: pickupAddress,
+          pickup_lat: pickupLat ?? null,
+          pickup_lng: pickupLng ?? null,
+          destination_address: destinationAddress,
+          destination_lat: destinationLat ?? null,
+          destination_lng: destinationLng ?? null,
+          estimated_distance_km: distanceKm,
+          estimated_duration_min: durationMin,
+          estimated_price_cents: price,
+          status: 'requested',
+          requested_by_user_id: userId,
+          cost_center_id: costCenterId ?? null,
+        })
+        .select('id, pickup_address, destination_address, estimated_price_cents, estimated_distance_km, estimated_duration_min, status, created_at')
+        .single();
+      if (error) {
+        console.error('Create ride supabase error:', error);
+        throw error;
+      }
+      ride = data;
+    } else {
+      const insert = await pool.query(
+        `INSERT INTO rides (
+          pickup_address, pickup_lat, pickup_lng,
+          destination_address, destination_lat, destination_lng,
+          estimated_distance_km, estimated_duration_min, estimated_price_cents,
+          status, requested_by_user_id, cost_center_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'requested', $10, $11)
+        RETURNING id, pickup_address, destination_address, estimated_price_cents,
+                  estimated_distance_km, estimated_duration_min, status, created_at`,
+        [
+          pickupAddress,
+          pickupLat ?? null,
+          pickupLng ?? null,
+          destinationAddress,
+          destinationLat ?? null,
+          destinationLng ?? null,
+          distanceKm,
+          durationMin,
+          price,
+          userId,
+          costCenterId ?? null,
+        ]
+      );
+      ride = insert.rows[0];
+    }
     const formattedPrice = (ride.estimated_price_cents / 100).toLocaleString(
       'pt-BR',
       { style: 'currency', currency: 'BRL' }
