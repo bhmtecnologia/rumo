@@ -1,10 +1,7 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
 import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
-import 'package:rumo_app/core/services/nominatim_service.dart';
 
 import 'request_ride_screen.dart';
 import 'waiting_for_driver_screen.dart';
@@ -19,10 +16,6 @@ class PassageiroHomeScreen extends StatefulWidget {
 
 class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   int _currentIndex = 0;
-  String? _originAddress;
-  bool _originLoading = true;
-  String? _originError;
-  final _nominatim = NominatimService();
   final _api = ApiService();
   RideListItem? _pendingRide;
   bool _pendingLoading = true;
@@ -33,7 +26,6 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _getOrigin();
     _loadPendingRide();
   }
 
@@ -108,49 +100,6 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
     }
   }
 
-  Future<void> _getOrigin() async {
-    setState(() {
-      _originLoading = true;
-      _originError = null;
-    });
-    try {
-      if (!kIsWeb) {
-        final permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          final requested = await Geolocator.requestPermission();
-          if (requested == LocationPermission.denied ||
-              requested == LocationPermission.deniedForever) {
-            if (mounted) {
-              setState(() {
-                _originLoading = false;
-                _originError = 'Ative a localização';
-              });
-            }
-            return;
-          }
-        }
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final address = await _nominatim.reverseGeocode(pos.latitude, pos.longitude);
-      if (mounted) {
-        setState(() {
-          _originAddress = address ?? 'Minha localização';
-          _originLoading = false;
-          _originError = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _originLoading = false;
-          _originAddress = 'Minha localização';
-        });
-      }
-    }
-  }
-
   static const _recentDestinations = [
     _DestinationItem('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF', Icons.access_time),
     _DestinationItem('Aeroporto Internacional de Brasília - Presidente Juscelino Kubitschek', 'Lago Sul, Brasília - DF', Icons.flight),
@@ -187,8 +136,6 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
                     const SizedBox(height: 8),
                     if (!_pendingLoading && _pendingRide != null) _buildPendingRideBanner(),
                     if (!_pendingLoading && _pendingRide != null) const SizedBox(height: 12),
-                    _buildOriginRow(),
-                    const SizedBox(height: 12),
                     _buildSearchBar(),
                     const SizedBox(height: 24),
                     ..._recentDestinations.map((d) => _buildDestinationTile(d)),
@@ -299,39 +246,6 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOriginRow() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.radio_button_checked, size: 20, color: Colors.green[400]),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _originLoading
-                ? Text(
-                    'Obtendo sua localização...',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                  )
-                : Text(
-                    _originError ?? _originAddress ?? 'Embarque',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
           ),
         ],
       ),
