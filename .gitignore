@@ -9,6 +9,7 @@ node_modules/
 # Build / output
 dist/
 build/
+tsconfig.tsbuildinfo
 # Flutter web build para deploy (ex.: Render)
 !rumo_app/build/web/
 !rumo_app/build/web/**
