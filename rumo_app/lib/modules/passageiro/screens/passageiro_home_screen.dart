@@ -115,7 +115,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   void _openRequestRide() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const RequestRideScreen()),
-    );
+    ).then((_) => _loadPendingRide());
   }
 
   @override

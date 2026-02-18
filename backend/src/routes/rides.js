@@ -321,7 +321,7 @@ const RIDE_LIST_COLS = `
 
 /**
  * GET /api/rides?available=1
- * Lista corridas. Gestor Central: todas. Motorista: ?available=1 = status requested; senão = minhas (driver_user_id = eu). Outros: só as que solicitei.
+ * Lista corridas. Gestor Central: todas. Motorista: ?available=1 = status requested; senão = minhas (que dirijo OU que solicitei). Outros: só as que solicitei.
  */
 router.get('/', async (req, res) => {
   try {
@@ -334,8 +334,8 @@ router.get('/', async (req, res) => {
     if (isDriver && req.query.available === '1') {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE status = 'requested' ORDER BY created_at DESC LIMIT 50`;
     } else if (isDriver) {
-      query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE driver_user_id = $1 ORDER BY created_at DESC LIMIT 50`;
-      params = [user.id];
+      query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE driver_user_id = $1 OR requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
+      params = [user.id, user.id];
     } else if (isCentral) {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides ORDER BY created_at DESC LIMIT 100`;
     } else {
