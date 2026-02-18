@@ -234,6 +234,27 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     _selectDestination(s.name, LatLng(results.first.lat, results.first.lon));
   }
 
+  Future<void> _openMapPicker() async {
+    final defaultLocation = LatLng(-15.7939, -47.8822);
+    final initial = _destinationCoords ?? _pickupCoords ?? defaultLocation;
+    final result = await Navigator.of(context).push<DefineLocationResult>(
+      MaterialPageRoute(
+        builder: (_) => DefineLocationScreen(initialPosition: initial),
+      ),
+    );
+    if (result != null && mounted) {
+      final label = (result.address?.trim().isNotEmpty ?? false) ? result.address! : 'Destino selecionado';
+      setState(() {
+        _destinationAddress = label;
+        _destinationCoords = result.coords;
+        _destinationController.text = label;
+        _showSearchResults = false;
+        _searchResults = [];
+      });
+      _openTripChoice();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -374,6 +395,15 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
                                 fontSize: 12, color: Colors.grey[600])),
                         onTap: () => _openTripChoiceFromSuggestion(s),
                       )),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _openMapPicker,
+                    icon: const Icon(Icons.map_outlined),
+                    label: const Text('Defina a localização no mapa'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
