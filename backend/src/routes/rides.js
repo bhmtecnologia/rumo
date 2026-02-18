@@ -2,7 +2,7 @@ import { Router } from 'express';
 import pool from '../db/pool.js';
 import { getSupabase, useSupabase } from '../db/supabase.js';
 import { calculateFare, getDistanceAndDuration } from '../lib/fare.js';
-import { isGestorCentral, isMotorista } from '../lib/auth.js';
+import { isGestorCentral, isGestorUnidade, isMotorista } from '../lib/auth.js';
 import { checkRestrictions } from '../lib/restrictions.js';
 import { logAudit } from '../lib/audit.js';
 
@@ -321,12 +321,13 @@ const RIDE_LIST_COLS = `
 
 /**
  * GET /api/rides?available=1
- * Lista corridas. Gestor Central: todas. Motorista: ?available=1 = status requested; senão = minhas (que dirijo OU que solicitei). Outros: só as que solicitei.
+ * Lista corridas. Gestor Central e Gestor Unidade: todas (central). Motorista: ?available=1 = status requested; senão = minhas (que dirijo OU que solicitei). Outros: só as que solicitei.
  */
 router.get('/', async (req, res) => {
   try {
     const user = req.user;
     const isCentral = user && isGestorCentral(user);
+    const isUnidade = user && isGestorUnidade(user);
     const isDriver = user && isMotorista(user);
     let query;
     let params = [];
@@ -336,7 +337,7 @@ router.get('/', async (req, res) => {
     } else if (isDriver) {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE driver_user_id = $1 OR requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
       params = [user.id, user.id];
-    } else if (isCentral) {
+    } else if (isCentral || isUnidade) {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides ORDER BY created_at DESC LIMIT 100`;
     } else {
       query = `SELECT ${RIDE_LIST_COLS} FROM rides WHERE requested_by_user_id = $1 ORDER BY created_at DESC LIMIT 100`;
