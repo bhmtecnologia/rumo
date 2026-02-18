@@ -23,8 +23,13 @@ export function getSupabase() {
   }
   try {
     const host = new URL(url).hostname;
+    if (host.includes('xxxx') || host === 'supabase.co') {
+      console.warn('[auth] SUPABASE_URL parece placeholder ou inválido. Use a URL real do projeto: https://SEU_REF.supabase.co');
+    }
     console.log('[auth] using Supabase for DB', { host });
-  } catch (_) {}
+  } catch (e) {
+    console.warn('[auth] SUPABASE_URL inválida', e.message);
+  }
   _client = createClient(url, key, {
     auth: {
       persistSession: false,

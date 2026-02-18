@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool.js';
+import { getSupabase, useSupabase } from '../db/supabase.js';
 import { calculateFare, getDistanceAndDuration } from '../lib/fare.js';
 import { isGestorCentral, isMotorista } from '../lib/auth.js';
 import { checkRestrictions } from '../lib/restrictions.js';
@@ -43,6 +44,14 @@ function mapRideRow(row) {
 }
 
 async function getFareConfig() {
+  if (useSupabase()) {
+    const { data } = await getSupabase()
+      .from('fare_config')
+      .select('base_fare_cents, per_km_cents, per_minute_cents, min_fare_cents')
+      .limit(1)
+      .maybeSingle();
+    return data ?? null;
+  }
   const r = await pool.query(
     'SELECT base_fare_cents, per_km_cents, per_minute_cents, min_fare_cents FROM fare_config LIMIT 1'
   );
@@ -50,6 +59,13 @@ async function getFareConfig() {
 }
 
 async function getUserCostCenterIds(userId) {
+  if (useSupabase()) {
+    const { data } = await getSupabase()
+      .from('user_cost_centers')
+      .select('cost_center_id')
+      .eq('user_id', userId);
+    return (data || []).map((row) => row.cost_center_id);
+  }
   const r = await pool.query(
     'SELECT cost_center_id FROM user_cost_centers WHERE user_id = $1',
     [userId]

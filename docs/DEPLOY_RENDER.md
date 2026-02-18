@@ -62,6 +62,8 @@ Para evitar **ENETUNREACH** (Render não consegue abrir conexão TCP com o Postg
 
 Com essas duas variáveis definidas, as rotas de **auth** (login, /me, alterar senha, recuperar senha, registro) e o **log de auditoria** passam a usar a API do Supabase. O login deixa de depender de conexão TCP e funciona no Render.
 
+**Se aparecer "TypeError: fetch failed" no log:** a API no Render não conseguiu chamar o Supabase. Confira: (1) **SUPABASE_URL** deve ser a URL **real** do projeto (ex.: `https://dgeqxfeucsyuxfhupujr.supabase.co`), não um placeholder como `https://xxxx.supabase.co` — pegue em Project Settings → API → Project URL; (2) se a URL estiver correta e o erro continuar, pode ser rede (ex.: IPv6) no Render; nesse caso ainda é possível usar a conexão pg com o pooler Session (host `aws-0-XX.pooler.supabase.com`).
+
 **Observação:** as demais rotas (corridas, units, centros de custo, usuários, relatórios etc.) ainda usam `pg` (DATABASE_URL). Para o app inteiro funcionar no Render sem TCP, seria preciso migrar essas rotas para o cliente Supabase também. Por enquanto, apenas auth + audit usam Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão definidos.
 
 ---

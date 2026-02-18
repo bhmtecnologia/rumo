@@ -34,7 +34,15 @@ router.post('/login', async (req, res) => {
         .eq('email', emailNorm)
         .limit(1);
       if (userError) {
-        console.log('[auth] login supabase error', { email: emailNorm, message: userError.message, code: userError.code });
+        const cause = userError.cause != null ? String(userError.cause) : undefined;
+        const causeCode = userError.cause?.code ?? userError.cause?.errno;
+        console.log('[auth] login supabase error', {
+          email: emailNorm,
+          message: userError.message,
+          code: userError.code,
+          cause: cause || undefined,
+          causeCode,
+        });
         return res.status(401).json({ error: 'E-mail ou senha incorretos' });
       }
       if (!users?.length) {

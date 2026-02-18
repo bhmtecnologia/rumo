@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { getSupabase, useSupabase } from '../db/supabase.js';
 
 /**
  * Verifica se uma solicitação de corrida está dentro das restrições do centro de custo.
@@ -14,15 +15,29 @@ export async function checkRestrictions(costCenterId, userId, options) {
     estimatedDistanceKm,
   } = options;
 
-  const ccRow = await pool.query(
-    `SELECT id, blocked, monthly_limit_cents, max_km, allowed_time_start, allowed_time_end
-     FROM cost_centers WHERE id = $1`,
-    [costCenterId]
-  );
-  if (ccRow.rows.length === 0) {
-    return { allowed: false, error: 'Centro de custo não encontrado' };
+  let cc = null;
+  if (useSupabase()) {
+    const { data, error } = await getSupabase()
+      .from('cost_centers')
+      .select('id, blocked, monthly_limit_cents, max_km, allowed_time_start, allowed_time_end')
+      .eq('id', costCenterId)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) {
+      return { allowed: false, error: 'Centro de custo não encontrado' };
+    }
+    cc = data;
+  } else {
+    const ccRow = await pool.query(
+      `SELECT id, blocked, monthly_limit_cents, max_km, allowed_time_start, allowed_time_end
+       FROM cost_centers WHERE id = $1`,
+      [costCenterId]
+    );
+    if (ccRow.rows.length === 0) {
+      return { allowed: false, error: 'Centro de custo não encontrado' };
+    }
+    cc = ccRow.rows[0];
   }
-  const cc = ccRow.rows[0];
 
   if (cc.blocked) {
     return { allowed: false, error: 'Este centro de custo está bloqueado para solicitações.' };
@@ -57,14 +72,28 @@ export async function checkRestrictions(costCenterId, userId, options) {
 
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  const sumResult = await pool.query(
-    `SELECT COALESCE(SUM(estimated_price_cents), 0)::bigint AS total
-     FROM rides
-     WHERE cost_center_id = $1 AND status != 'cancelled'
-       AND EXTRACT(YEAR FROM created_at) = $2 AND EXTRACT(MONTH FROM created_at) = $3`,
-    [costCenterId, year, month]
-  );
-  const spentCents = Number(sumResult.rows[0]?.total ?? 0);
+  let spentCents = 0;
+  if (useSupabase()) {
+    const startOfMonth = new Date(year, month - 1, 1).toISOString();
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59).toISOString();
+    const { data: rides } = await getSupabase()
+      .from('rides')
+      .select('estimated_price_cents')
+      .eq('cost_center_id', costCenterId)
+      .neq('status', 'cancelled')
+      .gte('created_at', startOfMonth)
+      .lte('created_at', endOfMonth);
+    spentCents = (rides || []).reduce((sum, r) => sum + (Number(r.estimated_price_cents) || 0), 0);
+  } else {
+    const sumResult = await pool.query(
+      `SELECT COALESCE(SUM(estimated_price_cents), 0)::bigint AS total
+       FROM rides
+       WHERE cost_center_id = $1 AND status != 'cancelled'
+         AND EXTRACT(YEAR FROM created_at) = $2 AND EXTRACT(MONTH FROM created_at) = $3`,
+      [costCenterId, year, month]
+    );
+    spentCents = Number(sumResult.rows[0]?.total ?? 0);
+  }
   const newTotal = spentCents + (Number(estimatedPriceCents) || 0);
   if (cc.monthly_limit_cents != null && newTotal > Number(cc.monthly_limit_cents)) {
     return {
@@ -73,13 +102,23 @@ export async function checkRestrictions(costCenterId, userId, options) {
     };
   }
 
-  const areas = await pool.query(
-    `SELECT type, lat, lng, radius_km FROM cost_center_allowed_areas WHERE cost_center_id = $1`,
-    [costCenterId]
-  );
-  if (areas.rows.length > 0) {
-    const originAreas = areas.rows.filter((a) => a.type === 'origin');
-    const destAreas = areas.rows.filter((a) => a.type === 'destination');
+  let areasRows = [];
+  if (useSupabase()) {
+    const { data } = await getSupabase()
+      .from('cost_center_allowed_areas')
+      .select('type, lat, lng, radius_km')
+      .eq('cost_center_id', costCenterId);
+    areasRows = data || [];
+  } else {
+    const areas = await pool.query(
+      `SELECT type, lat, lng, radius_km FROM cost_center_allowed_areas WHERE cost_center_id = $1`,
+      [costCenterId]
+    );
+    areasRows = areas.rows;
+  }
+  if (areasRows.length > 0) {
+    const originAreas = areasRows.filter((a) => a.type === 'origin');
+    const destAreas = areasRows.filter((a) => a.type === 'destination');
     if (originAreas.length > 0 && pickupLat != null && pickupLng != null) {
       const inAny = originAreas.some((a) => {
         const d = haversineKm(Number(pickupLat), Number(pickupLng), Number(a.lat), Number(a.lng));
