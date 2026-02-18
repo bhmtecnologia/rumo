@@ -128,23 +128,28 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 8),
-                    if (!_pendingLoading && _pendingRide != null) _buildPendingRideBanner(),
-                    if (!_pendingLoading && _pendingRide != null) const SizedBox(height: 12),
-                    _buildSearchBar(),
-                    const SizedBox(height: 24),
-                    ..._recentDestinations.map((d) => _buildDestinationTile(d)),
-                    const SizedBox(height: 24),
-                    _buildSugestoesSection(),
-                    const SizedBox(height: 24),
-                    _buildMaisFormasCard(),
-                    const SizedBox(height: 24),
-                  ],
+              child: RefreshIndicator(
+                onRefresh: _loadPendingRide,
+                color: const Color(0xFF00D95F),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 8),
+                      if (!_pendingLoading && _pendingRide != null) _buildPendingRideBanner(),
+                      if (!_pendingLoading && _pendingRide != null) const SizedBox(height: 12),
+                      _buildSearchBar(),
+                      const SizedBox(height: 24),
+                      ..._recentDestinations.map((d) => _buildDestinationTile(d)),
+                      const SizedBox(height: 24),
+                      _buildSugestoesSection(),
+                      const SizedBox(height: 24),
+                      _buildMaisFormasCard(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
