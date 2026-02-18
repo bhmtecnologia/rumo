@@ -138,6 +138,34 @@ class ApiService {
     return Ride.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Motorista: retorna status online e posição atual.
+  Future<Map<String, dynamic>> getDriverStatus() async {
+    final res = await http.get(Uri.parse('$_base/driver/status'), headers: _headers);
+    await _check401(res);
+    if (res.statusCode != 200) throw Exception(errorMessage(null, res, 'Erro ao consultar status'));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// Motorista: ficar online/offline; opcional enviar lat/lng.
+  Future<void> updateDriverStatus({
+    required bool isOnline,
+    double? lat,
+    double? lng,
+  }) async {
+    final body = <String, dynamic>{'isOnline': isOnline};
+    if (lat != null && lng != null) {
+      body['lat'] = lat;
+      body['lng'] = lng;
+    }
+    final res = await http.patch(
+      Uri.parse('$_base/driver/status'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    await _check401(res);
+    if (res.statusCode != 200) throw Exception(errorMessage(null, res, 'Erro ao atualizar status'));
+  }
+
   /// Lista corridas. Motorista: [available] true = só status requested; false/omitido = minhas corridas.
   Future<List<RideListItem>> listRides({bool? available}) async {
     var uri = Uri.parse('$_base/rides');

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import ridesRouter from './routes/rides.js';
+import driverRouter from './routes/driver.js';
 import authRouter from './routes/auth.js';
 import unitsRouter from './routes/units.js';
 import costCentersRouter from './routes/costCenters.js';
@@ -16,6 +17,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRouter);
 app.use('/api/rides', requireAuth, ridesRouter);
+app.use('/api/driver', requireAuth, driverRouter);
 app.use('/api/reports', requireAuth, reportsRouter);
 app.use('/api/units', unitsRouter);
 app.use('/api/cost-centers', costCentersRouter);

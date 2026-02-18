@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'package:rumo_app/core/models/ride.dart';
 import 'package:rumo_app/core/models/ride_list_item.dart';
@@ -22,6 +25,9 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
   Ride? _activeRide;
   bool _loading = true;
   String? _error;
+  bool _isOnline = false;
+  bool _loadingStatus = false;
+  Timer? _locationTimer;
 
   @override
   void initState() {
@@ -29,12 +35,24 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     if (AuthService().currentUser?.isMotorista != true) return;
     setState(() { _loading = true; _error = null; });
     try {
-      final available = await _api.listRides(available: true);
-      final myRides = await _api.listRides(available: false);
+      final results = await Future.wait([
+        _api.listRides(available: true),
+        _api.listRides(available: false),
+        _api.getDriverStatus(),
+      ]);
+      final available = results[0] as List<RideListItem>;
+      final myRides = results[1] as List<RideListItem>;
+      final status = results[2] as Map<String, dynamic>;
       Ride? active;
       for (final r in myRides) {
         if (r.status != 'completed' && r.status != 'cancelled') {
@@ -48,14 +66,86 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
           _available = available;
           _myRides = myRides;
           _activeRide = active;
+          _isOnline = status['isOnline'] == true;
           _loading = false;
         });
+        if (_isOnline) _startLocationUpdates();
       }
     } catch (e) {
       if (mounted) setState(() {
         _loading = false;
         _error = e.toString().replaceFirst('Exception: ', '');
       });
+    }
+  }
+
+  Future<Position?> _getPosition() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        final requested = await Geolocator.requestPermission();
+        if (requested == LocationPermission.denied || requested == LocationPermission.deniedForever) return null;
+      }
+      return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _startLocationUpdates() {
+    _locationTimer?.cancel();
+    void sendPosition() async {
+      final pos = await _getPosition();
+      if (!mounted || !_isOnline) return;
+      try {
+        await _api.updateDriverStatus(
+          isOnline: true,
+          lat: pos?.latitude,
+          lng: pos?.longitude,
+        );
+      } catch (_) {}
+    }
+    sendPosition();
+    _locationTimer = Timer.periodic(const Duration(seconds: 30), (_) => sendPosition());
+  }
+
+  void _stopLocationUpdates() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+  }
+
+  Future<void> _toggleOnline(bool value) async {
+    if (_loadingStatus) return;
+    setState(() => _loadingStatus = true);
+    try {
+      if (value) {
+        final pos = await _getPosition();
+        await _api.updateDriverStatus(
+          isOnline: true,
+          lat: pos?.latitude,
+          lng: pos?.longitude,
+        );
+        if (mounted) {
+          setState(() { _isOnline = true; _loadingStatus = false; });
+          _startLocationUpdates();
+        }
+      } else {
+        _stopLocationUpdates();
+        await _api.updateDriverStatus(isOnline: false);
+        if (mounted) setState(() { _isOnline = false; _loadingStatus = false; });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(value ? 'Você está online no mapa da central.' : 'Você está offline.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingStatus = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -154,6 +244,50 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Card(
+                          color: _isOnline ? const Color(0xFF1B3D1B) : const Color(0xFF2C2C2C),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isOnline ? Icons.location_on : Icons.location_off,
+                                  color: _isOnline ? Colors.greenAccent : Colors.grey,
+                                  size: 28,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _isOnline ? 'Online no mapa da central' : 'Offline',
+                                        style: TextStyle(
+                                          color: _isOnline ? Colors.greenAccent : Colors.grey[400],
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      Text(
+                                        _isOnline ? 'Você aparece no mapa e pode receber corridas' : 'Fique online para receber corridas',
+                                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_loadingStatus)
+                                  const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                                else
+                                  Switch(
+                                    value: _isOnline,
+                                    onChanged: _toggleOnline,
+                                    activeColor: Colors.greenAccent,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         if (_activeRide != null) ...[
                           Card(
                             color: const Color(0xFF2C2C2C),

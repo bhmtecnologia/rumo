@@ -251,6 +251,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_event ON audit_log(event_type);
 CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
+
+-- Motorista online/offline e posição para mapa da central
+CREATE TABLE IF NOT EXISTS driver_availability (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  is_online BOOLEAN NOT NULL DEFAULT false,
+  lat DECIMAL(10, 8),
+  lng DECIMAL(11, 8),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_driver_availability_online ON driver_availability(is_online) WHERE is_online = true;
 `;
 
 async function migrate() {
