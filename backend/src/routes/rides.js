@@ -23,7 +23,7 @@ function mapRideRow(row) {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    formattedPrice: (row.estimated_price_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+    formattedPrice: ((Number(row.estimated_price_cents) || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
   };
   if (row.driver_user_id != null) base.driverUserId = row.driver_user_id;
   if (row.driver_name != null) base.driverName = row.driver_name;
@@ -338,13 +338,13 @@ router.get('/', async (req, res) => {
       } else if (isDriver && req.query.available === '1') {
         q = q.eq('status', 'requested').limit(50);
       } else if (isDriver) {
-        q = q.or(`driver_user_id.eq.${user.id},requested_by_user_id.eq.${user.id}`).limit(100);
+        q = q.or(`driver_user_id.eq."${user.id}",requested_by_user_id.eq."${user.id}"`).limit(100);
       } else {
         q = q.eq('requested_by_user_id', user.id).limit(100);
       }
       const { data: rows, error } = await q;
       if (error) {
-        console.error('List rides Supabase error:', error);
+        console.error('List rides Supabase error:', error.message || error, error);
         return res.status(500).json({ error: 'Erro ao listar corridas' });
       }
       const rides = (rows || []).map((row) => mapRideRow(row));
