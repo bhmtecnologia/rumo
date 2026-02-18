@@ -19,6 +19,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import MapIcon from '@mui/icons-material/Map';
 import PersonIcon from '@mui/icons-material/Person';
+import GroupIcon from '@mui/icons-material/Group';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import type { User } from '../types';
 
@@ -29,6 +30,7 @@ const items = [
   { path: '/central', label: 'Pedidos na central', icon: <ListAltIcon /> },
   { path: '/mapa', label: 'Mapa', icon: <MapIcon /> },
   { path: '/atendimento', label: 'Quem está atendendo', icon: <PersonIcon /> },
+  { path: '/usuarios', label: 'Usuários', icon: <GroupIcon /> },
 ];
 
 interface LayoutProps {

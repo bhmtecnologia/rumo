@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Central from './pages/Central';
 import Mapa from './pages/Mapa';
 import Atendimento from './pages/Atendimento';
+import Usuarios from './pages/Usuarios';
 
 const GESTOR_PROFILES = ['gestor_central', 'gestor_unidade'];
 
@@ -55,6 +56,7 @@ function App() {
         <Route path="/central" element={<Central />} />
         <Route path="/mapa" element={<Mapa />} />
         <Route path="/atendimento" element={<Atendimento />} />
+        <Route path="/usuarios" element={<Usuarios user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
