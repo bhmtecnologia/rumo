@@ -471,29 +471,63 @@ router.patch('/:id/complete', async (req, res) => {
 });
 
 /**
- * PATCH /api/rides/:id/cancel — Cancelar (solicitante ou motorista). Body: { reason? }
+ * PATCH /api/rides/:id/cancel — Cancelar (solicitante, motorista ou gestor central/unidade). Body: { reason? }
  */
 router.patch('/:id/cancel', async (req, res) => {
   try {
     const { id } = req.params;
     const reason = req.body?.reason?.trim() || null;
-    const r = await pool.query(
-      `SELECT id, requested_by_user_id, driver_user_id, status FROM rides WHERE id = $1`,
-      [id]
-    );
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: 'Corrida não encontrada.' });
+    let row;
+
+    if (useSupabase()) {
+      const { data, error } = await getSupabase().from('rides').select('id, requested_by_user_id, driver_user_id, status').eq('id', id).single();
+      if (error || !data) {
+        return res.status(404).json({ error: 'Corrida não encontrada.' });
+      }
+      row = data;
+    } else {
+      const r = await pool.query(
+        `SELECT id, requested_by_user_id, driver_user_id, status FROM rides WHERE id = $1`,
+        [id]
+      );
+      if (r.rows.length === 0) {
+        return res.status(404).json({ error: 'Corrida não encontrada.' });
+      }
+      row = r.rows[0];
     }
-    const row = r.rows[0];
+
+    const isCentral = isGestorCentral(req.user);
+    const isUnidade = isGestorUnidade(req.user);
     const isRequester = row.requested_by_user_id === req.user.id;
     const isDriver = row.driver_user_id === req.user.id;
-    if (!isRequester && !isDriver) {
-      return res.status(403).json({ error: 'Apenas solicitante ou motorista podem cancelar.' });
+    if (!isCentral && !isUnidade && !isRequester && !isDriver) {
+      return res.status(403).json({ error: 'Apenas solicitante, motorista ou gestor podem cancelar.' });
     }
     const finalStatuses = ['completed', 'cancelled'];
     if (finalStatuses.includes(row.status)) {
       return res.status(400).json({ error: 'Corrida já finalizada ou cancelada.' });
     }
+
+    if (useSupabase()) {
+      const { error: updateError } = await getSupabase()
+        .from('rides')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          cancel_reason: reason,
+          cancelled_by_user_id: req.user.id,
+        })
+        .eq('id', id);
+      if (updateError) {
+        console.error('Cancel ride Supabase error:', updateError);
+        return res.status(500).json({ error: 'Erro ao cancelar corrida' });
+      }
+      const { data: updated } = await getSupabase().from('rides').select('*').eq('id', id).single();
+      await logAudit('ride_cancelled', req.user.id, 'ride', id, { reason });
+      return res.json(mapRideRow(updated));
+    }
+
     await pool.query(
       `UPDATE rides SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW(),
         cancel_reason = $1, cancelled_by_user_id = $2

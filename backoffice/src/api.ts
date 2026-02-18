@@ -37,3 +37,20 @@ export async function listRides(): Promise<import('./types').RideListItem[]> {
   if (!res.ok) throw new Error(data.error || 'Erro ao listar corridas');
   return Array.isArray(data) ? data : [];
 }
+
+export async function cancelRide(id: string, reason?: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('Não autenticado');
+  const base = import.meta.env.VITE_API_URL || '';
+  const res = await fetch(`${base}/api/rides/${id}/cancel`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason: reason || undefined }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error('Sessão expirada');
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'Erro ao cancelar corrida');
+}
