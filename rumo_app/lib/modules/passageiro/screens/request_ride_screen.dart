@@ -10,6 +10,7 @@ import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/auth_service.dart';
 import 'package:rumo_app/core/services/nominatim_service.dart';
 
+import 'define_location_screen.dart';
 import 'trip_choice_screen.dart';
 
 class RequestRideScreen extends StatefulWidget {

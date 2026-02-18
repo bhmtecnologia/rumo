@@ -45,7 +45,7 @@ class _DefineLocationScreenState extends State<DefineLocationScreen> {
     });
     try {
       final address = await _nominatim.reverseGeocode(_marker!.latitude, _marker!.longitude);
-      Navigator.of(context).pop(_DefineLocationResult(
+      Navigator.of(context).pop(DefineLocationResult(
         coords: _marker!,
         address: address?.trim(),
       ));
