@@ -6,12 +6,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:rumo_app/core/models/cost_center.dart';
+import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/auth_service.dart';
 import 'package:rumo_app/core/services/nominatim_service.dart';
 
 import 'define_location_screen.dart';
 import 'trip_choice_screen.dart';
+import 'waiting_for_driver_screen.dart';
 
 class RequestRideScreen extends StatefulWidget {
   const RequestRideScreen({super.key});
@@ -36,6 +38,11 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   bool _showSearchResults = false;
   List<CostCenter> _userCostCenters = [];
   String? _selectedCostCenterId;
+  RideListItem? _pendingRide;
+  bool _pendingLoading = true;
+  bool _cancelling = false;
+
+  static const _pendingStatuses = ['requested', 'accepted', 'driver_arrived', 'in_progress'];
 
   /// Sugestões com coordenadas reais quando disponível (lat, lng).
   static const _suggestions = [
@@ -50,6 +57,78 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     super.initState();
     _getLocation();
     _loadUserCostCenters();
+    _loadPendingRide();
+  }
+
+  Future<void> _loadPendingRide() async {
+    setState(() => _pendingLoading = true);
+    try {
+      final list = await _api.listRides();
+      if (!mounted) return;
+      final pending = list.where((r) => _pendingStatuses.contains(r.status)).toList();
+      pending.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      setState(() {
+        _pendingRide = pending.isNotEmpty ? pending.first : null;
+        _pendingLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _pendingLoading = false);
+    }
+  }
+
+  Future<void> _openWaitingScreen() async {
+    if (_pendingRide == null) return;
+    try {
+      final ride = await _api.getRide(_pendingRide!.id);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => WaitingForDriverScreen(
+            ride: ride,
+            formattedPrice: _pendingRide!.formattedPrice,
+          ),
+        ),
+      ).then((_) => _loadPendingRide());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelPendingRide() async {
+    if (_pendingRide == null || _cancelling) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancelar corrida?'),
+        content: const Text(
+          'Deseja realmente cancelar esta solicitação? Você poderá solicitar uma nova corrida depois.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim, cancelar')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _cancelling = true);
+    try {
+      await _api.cancelRide(_pendingRide!.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Corrida cancelada.')));
+      _loadPendingRide();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
   }
 
   Future<void> _loadUserCostCenters() async {
@@ -256,6 +335,87 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
     }
   }
 
+  Widget _buildPendingRideBanner() {
+    final r = _pendingRide!;
+    final statusLabel = r.status == 'requested'
+        ? 'Aguardando motorista aceitar'
+        : r.status == 'accepted'
+            ? 'Motorista a caminho'
+            : r.status == 'driver_arrived'
+                ? 'Motorista chegou'
+                : 'Viagem em andamento';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.schedule, color: Colors.amber[700], size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusLabel,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              r.pickupAddress,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              r.destinationAddress,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              r.formattedPrice,
+              style: const TextStyle(color: Color(0xFF00D95F), fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _cancelling ? null : _cancelPendingRide,
+                  icon: _cancelling
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.close, size: 18),
+                  label: const Text('Cancelar'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red[400],
+                    side: BorderSide(color: Colors.red[400]!),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _openWaitingScreen,
+                  icon: const Icon(Icons.visibility, size: 18),
+                  label: const Text('Acompanhar'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D95F)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -282,6 +442,15 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (!_pendingLoading && _pendingRide != null) ...[
+                    _buildPendingRideBanner(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Você já tem uma corrida aguardando. Cancele acima ou use "Acompanhar" antes de solicitar outra.',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   if (_locationLoading)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 12),
