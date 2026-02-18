@@ -45,7 +45,16 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
   static const _driverStatusTimeout = Duration(seconds: 10);
 
   Future<void> _load() async {
-    if (AuthService().currentUser?.isMotorista != true) return;
+    final user = AuthService().currentUser;
+    if (user?.isMotorista != true) {
+      if (mounted) setState(() {
+        _loading = false;
+        _error = user == null
+            ? 'Sessão não carregada. Volte e tente novamente.'
+            : 'Acesso restrito a motoristas. Faça login com um usuário motorista.';
+      });
+      return;
+    }
     setState(() { _loading = true; _error = null; });
     try {
       // Carrega corridas com timeout para não travar se o backend demorar/falhar
