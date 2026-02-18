@@ -41,32 +41,57 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
     super.dispose();
   }
 
+  static const _loadTimeout = Duration(seconds: 25);
+  static const _driverStatusTimeout = Duration(seconds: 10);
+
   Future<void> _load() async {
     if (AuthService().currentUser?.isMotorista != true) return;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        _api.listRides(available: true),
-        _api.listRides(available: false),
-        _api.getDriverStatus(),
-      ]);
-      final available = results[0] as List<RideListItem>;
-      final myRides = results[1] as List<RideListItem>;
-      final status = results[2] as Map<String, dynamic>;
+      // Carrega corridas com timeout para não travar se o backend demorar/falhar
+      final List<RideListItem> available;
+      final List<RideListItem> myRides;
+      try {
+        final results = await Future.wait([
+          _api.listRides(available: true),
+          _api.listRides(available: false),
+        ]).timeout(_loadTimeout);
+        available = results[0];
+        myRides = results[1];
+      } on TimeoutException {
+        if (mounted) setState(() {
+          _loading = false;
+          _error = 'Demorou demais. Verifique a conexão e tente novamente.';
+        });
+        return;
+      }
+
       Ride? active;
       for (final r in myRides) {
         if (r.status != 'completed' && r.status != 'cancelled') {
-          final detail = await _api.getRide(r.id);
-          active = detail;
+          try {
+            final detail = await _api.getRide(r.id).timeout(_loadTimeout);
+            active = detail;
+          } catch (_) {}
           break;
         }
       }
+
+      // Status online do motorista: não bloqueia a tela; se falhar ou demorar, assume offline
+      bool isOnline = false;
+      try {
+        final status = await _api.getDriverStatus().timeout(_driverStatusTimeout);
+        isOnline = status['isOnline'] == true;
+      } catch (_) {
+        isOnline = false;
+      }
+
       if (mounted) {
         setState(() {
           _available = available;
           _myRides = myRides;
           _activeRide = active;
-          _isOnline = status['isOnline'] == true;
+          _isOnline = isOnline;
           _loading = false;
         });
         if (_isOnline) _startLocationUpdates();
