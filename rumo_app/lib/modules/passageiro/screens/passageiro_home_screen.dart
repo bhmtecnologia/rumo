@@ -43,14 +43,14 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   void _startPendingPolling() {
     _pendingPollTimer?.cancel();
     if (_pendingRide == null) return;
-    _pendingPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _pendingPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted) return;
-      _loadPendingRide();
+      _loadPendingRide(silent: true);
     });
   }
 
-  Future<void> _loadPendingRide() async {
-    setState(() => _pendingLoading = true);
+  Future<void> _loadPendingRide({bool silent = false}) async {
+    if (!silent) setState(() => _pendingLoading = true);
     try {
       final list = await _api.listRides();
       if (!mounted) return;
@@ -58,7 +58,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
       pending.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
       setState(() {
         _pendingRide = pending.isNotEmpty ? pending.first : null;
-        _pendingLoading = false;
+        if (!silent) _pendingLoading = false;
       });
       if (_pendingRide != null) {
         _startPendingPolling();
@@ -66,7 +66,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         _pendingPollTimer?.cancel();
       }
     } catch (_) {
-      if (mounted) setState(() => _pendingLoading = false);
+      if (mounted && !silent) setState(() => _pendingLoading = false);
     }
   }
 
@@ -253,7 +253,10 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
                   onPressed: _openWaitingScreen,
                   icon: const Icon(Icons.visibility, size: 18),
                   label: const Text('Acompanhar'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D95F)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00D95F),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),

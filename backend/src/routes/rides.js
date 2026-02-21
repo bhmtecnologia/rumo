@@ -508,10 +508,43 @@ router.patch('/:id/accept', async (req, res) => {
 router.patch('/:id/arrived', async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
+
+    if (useSupabase()) {
+      const { data: existing, error: fetchErr } = await getSupabase()
+        .from('rides')
+        .select('id, status, driver_user_id')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !existing) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou você não é o motorista.' });
+      }
+      if (existing.driver_user_id !== userId || existing.status !== 'accepted') {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      const { data: updated, error: updateErr } = await getSupabase()
+        .from('rides')
+        .update({
+          status: 'driver_arrived',
+          driver_arrived_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('driver_user_id', userId)
+        .eq('status', 'accepted')
+        .select()
+        .single();
+      if (updateErr || !updated) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      await logAudit('ride_driver_arrived', userId, 'ride', id, {});
+      return res.json(mapRideRow(updated));
+    }
+
     const r = await pool.query(
       `UPDATE rides SET status = 'driver_arrived', driver_arrived_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' RETURNING *`,
-      [id, req.user.id]
+      [id, userId]
     );
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Corrida não encontrada ou você não é o motorista.' });
