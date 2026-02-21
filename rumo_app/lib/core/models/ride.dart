@@ -14,6 +14,9 @@ class Ride {
   final String? driverUserId;
   final String? driverName;
   final String? vehiclePlate;
+  final double? driverLat;
+  final double? driverLng;
+  final int? etaMin;
   final DateTime? acceptedAt;
   final DateTime? driverArrivedAt;
   final DateTime? startedAt;
@@ -44,6 +47,9 @@ class Ride {
     this.driverUserId,
     this.driverName,
     this.vehiclePlate,
+    this.driverLat,
+    this.driverLng,
+    this.etaMin,
     this.acceptedAt,
     this.driverArrivedAt,
     this.startedAt,
@@ -76,6 +82,9 @@ class Ride {
       driverUserId: json['driverUserId'] as String?,
       driverName: json['driverName'] as String?,
       vehiclePlate: json['vehiclePlate'] as String?,
+      driverLat: _toDouble(json['driverLat']),
+      driverLng: _toDouble(json['driverLng']),
+      etaMin: json['etaMin'] as int?,
       acceptedAt: _parseDate(json['acceptedAt']),
       driverArrivedAt: _parseDate(json['driverArrivedAt']),
       startedAt: _parseDate(json['startedAt']),

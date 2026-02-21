@@ -8,6 +8,7 @@ class RumoMap extends StatefulWidget {
   final LatLng? pickup;
   final LatLng? destination;
   final LatLng? userLocation;
+  final LatLng? driverPosition;
   final double height;
   final bool fitBounds;
 
@@ -16,6 +17,7 @@ class RumoMap extends StatefulWidget {
     this.pickup,
     this.destination,
     this.userLocation,
+    this.driverPosition,
     this.height = 280,
     this.fitBounds = true,
   });
@@ -39,7 +41,8 @@ class _RumoMapState extends State<RumoMap> {
   void didUpdateWidget(covariant RumoMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.pickup != widget.pickup ||
-        oldWidget.destination != widget.destination) {
+        oldWidget.destination != widget.destination ||
+        oldWidget.driverPosition != widget.driverPosition) {
       _loadRoute();
     }
   }
@@ -68,8 +71,12 @@ class _RumoMapState extends State<RumoMap> {
   }
 
   void _fitBounds() {
-    if (_routePoints.isEmpty) return;
-    final bounds = LatLngBounds.fromPoints(_routePoints);
+    final points = List<LatLng>.from(_routePoints);
+    if (widget.pickup != null) points.add(widget.pickup!);
+    if (widget.destination != null) points.add(widget.destination!);
+    if (widget.driverPosition != null) points.add(widget.driverPosition!);
+    if (points.isEmpty) return;
+    final bounds = LatLngBounds.fromPoints(points);
     _mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
@@ -83,6 +90,7 @@ class _RumoMapState extends State<RumoMap> {
   Widget build(BuildContext context) {
     final center = widget.pickup ??
         widget.destination ??
+        widget.driverPosition ??
         (widget.userLocation != null
             ? widget.userLocation!
             : _defaultCenter);
@@ -141,6 +149,24 @@ class _RumoMapState extends State<RumoMap> {
                       Icons.place,
                       color: Colors.red,
                       size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            if (widget.driverPosition != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: widget.driverPosition!,
+                    width: 36,
+                    height: 36,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.directions_car, color: Colors.white, size: 22),
                     ),
                   ),
                 ],

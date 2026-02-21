@@ -767,7 +767,8 @@ router.post('/:id/messages', async (req, res) => {
 });
 
 /**
- * GET /api/rides/:id — Detalhe (qualquer autenticado: sua corrida, ou gestor central, ou motorista da corrida)
+ * GET /api/rides/:id — Detalhe (qualquer autenticado: sua corrida, ou gestor central, ou motorista da corrida).
+ * Inclui driverLat, driverLng, etaMin quando o motorista está atribuído (posição em tempo real).
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -793,7 +794,43 @@ router.get('/:id', async (req, res) => {
     if (!isCentral && !isUnidade && !isRequester && !isDriver) {
       return res.status(403).json({ error: 'Acesso negado a esta corrida.' });
     }
-    return res.json(mapRideRow(row));
+    const mapped = mapRideRow(row);
+    if (row.driver_user_id && ['accepted', 'driver_arrived', 'in_progress'].includes(row.status)) {
+      let driverLat = null;
+      let driverLng = null;
+      if (useSupabase()) {
+        const { data: da } = await getSupabase()
+          .from('driver_availability')
+          .select('lat, lng')
+          .eq('user_id', row.driver_user_id)
+          .maybeSingle();
+        if (da?.lat != null && da?.lng != null) {
+          driverLat = parseFloat(da.lat);
+          driverLng = parseFloat(da.lng);
+        }
+      } else {
+        const dr = await pool.query(
+          'SELECT lat, lng FROM driver_availability WHERE user_id = $1',
+          [row.driver_user_id]
+        );
+        if (dr.rows.length > 0 && dr.rows[0].lat != null && dr.rows[0].lng != null) {
+          driverLat = parseFloat(dr.rows[0].lat);
+          driverLng = parseFloat(dr.rows[0].lng);
+        }
+      }
+      mapped.driverLat = driverLat;
+      mapped.driverLng = driverLng;
+      if (driverLat != null && driverLng != null && row.pickup_lat != null && row.pickup_lng != null) {
+        const { durationMin } = getDistanceAndDuration(
+          driverLat,
+          driverLng,
+          parseFloat(row.pickup_lat),
+          parseFloat(row.pickup_lng)
+        );
+        mapped.etaMin = durationMin;
+      }
+    }
+    return res.json(mapped);
   } catch (err) {
     console.error('Get ride error:', err);
     return res.status(500).json({ error: 'Erro ao buscar corrida' });
