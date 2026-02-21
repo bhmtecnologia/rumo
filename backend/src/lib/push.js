@@ -61,9 +61,10 @@ export async function sendNewRideNotificationToDrivers(tokens, ride) {
       tokens,
     };
     const result = await messaging.sendEachForMulticast(message);
+    console.log('[push] FCM enviado:', result.successCount, 'ok,', result.failureCount, 'falhas');
     if (result.failureCount > 0) {
       result.responses.forEach((resp, i) => {
-        if (!resp.success) console.warn('FCM send failed:', resp.error?.message, 'token:', tokens[i]?.slice(0, 20) + '...');
+        if (!resp.success) console.warn('[push] FCM falhou:', resp.error?.message, 'token:', tokens[i]?.slice(0, 20) + '...');
       });
     }
   } catch (err) {

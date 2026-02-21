@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart' show debugPrint, Color;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -84,12 +85,23 @@ class PushService {
   Future<void> _setupFcm() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
+    // Android 13+: pedir permissão de notificação em runtime
+    if (Platform.isAndroid) {
+      final status = await Permission.notification.status;
+      if (!status.isGranted) {
+        await Permission.notification.request();
+      }
+    }
+
     final settings = await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
-    if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+    // Registra token mesmo se negado (Android <13 pode funcionar; backend precisa do token)
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      debugPrint('PushService: permissão de notificação negada');
+    }
 
     // Foreground: mostrar notificação local com som
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
@@ -125,7 +137,10 @@ class PushService {
 
     try {
       await ApiService().registerFcmToken(token);
-    } catch (_) {}
+      debugPrint('PushService: token FCM registrado no backend');
+    } catch (e) {
+      debugPrint('PushService: falha ao registrar token: $e');
+    }
   }
 
   /// Chame quando o motorista fizer login ou ficar online para garantir token atualizado.

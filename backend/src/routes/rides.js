@@ -322,6 +322,7 @@ router.post('/', async (req, res) => {
     // Push para motoristas online
     try {
       const tokens = await getOnlineDriverFcmTokens();
+      console.log('[push] Nova corrida', ride.id, '→', tokens.length, 'token(s) de motoristas online');
       if (tokens.length > 0) {
         await sendNewRideNotificationToDrivers(tokens, {
           id: ride.id,
@@ -421,15 +422,51 @@ router.patch('/:id/accept', async (req, res) => {
     }
     const { id } = req.params;
     const vehiclePlate = req.body?.vehiclePlate?.trim() || null;
+    const userId = req.user.id;
+    const userName = req.user.name;
+
+    if (useSupabase()) {
+      const { data: existing, error: fetchErr } = await getSupabase()
+        .from('rides')
+        .select('id, status')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !existing) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou já foi aceita.' });
+      }
+      if (existing.status !== 'requested') {
+        return res.status(404).json({ error: 'Corrida já foi aceita por outro motorista.' });
+      }
+      const { data: updated, error: updateErr } = await getSupabase()
+        .from('rides')
+        .update({
+          status: 'accepted',
+          driver_user_id: userId,
+          driver_name: userName,
+          vehicle_plate: vehiclePlate,
+          accepted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('status', 'requested')
+        .select()
+        .single();
+      if (updateErr || !updated) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou já foi aceita.' });
+      }
+      await logAudit('ride_accepted', userId, 'ride', id, { vehiclePlate });
+      return res.json(mapRideRow(updated));
+    }
+
     const r = await pool.query(
       `UPDATE rides SET status = 'accepted', driver_user_id = $1, driver_name = $2, vehicle_plate = $3, accepted_at = NOW(), updated_at = NOW()
        WHERE id = $4 AND status = 'requested' RETURNING *`,
-      [req.user.id, req.user.name, vehiclePlate, id]
+      [userId, userName, vehiclePlate, id]
     );
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Corrida não encontrada ou já foi aceita.' });
     }
-    await logAudit('ride_accepted', req.user.id, 'ride', id, { vehiclePlate });
+    await logAudit('ride_accepted', userId, 'ride', id, { vehiclePlate });
     return res.json(mapRideRow(r.rows[0]));
   } catch (err) {
     console.error('Accept ride error:', err);

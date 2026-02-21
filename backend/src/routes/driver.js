@@ -46,10 +46,56 @@ router.post('/fcm-token', async (req, res) => {
         [userId, token.trim()]
       );
     }
+    console.log('[push] Token registrado para motorista', userId);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Driver FCM token error:', err);
     return res.status(500).json({ error: 'Erro ao registrar token' });
+  }
+});
+
+/**
+ * GET /api/driver/push-debug
+ * Retorna contagem de tokens e motoristas online (para debug do push).
+ */
+router.get('/push-debug', async (req, res) => {
+  try {
+    const user = req.user;
+    if (!isMotorista(user) && !isGestorCentral(user) && !isGestorUnidade(user)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    let tokensCount = 0;
+    let onlineWithTokens = 0;
+    if (useSupabase()) {
+      const { count: tc } = await getSupabase()
+        .from('driver_fcm_tokens')
+        .select('*', { count: 'exact', head: true });
+      tokensCount = tc ?? 0;
+      const { data: online } = await getSupabase()
+        .from('driver_availability')
+        .select('user_id')
+        .eq('is_online', true);
+      const userIds = (online || []).map((r) => r.user_id);
+      if (userIds.length > 0) {
+        const { count: oc } = await getSupabase()
+          .from('driver_fcm_tokens')
+          .select('*', { count: 'exact', head: true })
+          .in('user_id', userIds);
+        onlineWithTokens = oc ?? 0;
+      }
+    } else {
+      const r1 = await pool.query('SELECT COUNT(*) AS n FROM driver_fcm_tokens');
+      tokensCount = parseInt(r1.rows[0]?.n ?? 0, 10);
+      const r2 = await pool.query(
+        `SELECT COUNT(DISTINCT t.user_id) AS n FROM driver_fcm_tokens t
+         JOIN driver_availability d ON d.user_id = t.user_id WHERE d.is_online = true`
+      );
+      onlineWithTokens = parseInt(r2.rows[0]?.n ?? 0, 10);
+    }
+    return res.json({ tokensCount, onlineWithTokens });
+  } catch (err) {
+    console.error('Push debug error:', err);
+    return res.status(500).json({ error: 'Erro' });
   }
 });
 

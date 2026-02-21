@@ -19,7 +19,7 @@ class MotoristaHomeScreen extends StatefulWidget {
   State<MotoristaHomeScreen> createState() => _MotoristaHomeScreenState();
 }
 
-class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
+class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> with WidgetsBindingObserver {
   final ApiService _api = ApiService();
   List<RideListItem> _available = [];
   List<RideListItem> _myRides = [];
@@ -29,23 +29,34 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
   bool _isOnline = false;
   bool _loadingStatus = false;
   Timer? _locationTimer;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _locationTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted && _isOnline) {
+      _load(silent: true);
+    }
   }
 
   static const _loadTimeout = Duration(seconds: 25);
   static const _driverStatusTimeout = Duration(seconds: 10);
 
-  Future<void> _load() async {
+  Future<void> _load({bool silent = false}) async {
     final user = AuthService().currentUser;
     if (user?.isMotorista != true) {
       if (mounted) setState(() {
@@ -56,7 +67,7 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
       });
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    if (!silent) setState(() { _loading = true; _error = null; });
     try {
       // Carrega corridas com timeout para não travar se o backend demorar/falhar
       final List<RideListItem> available;
@@ -69,7 +80,7 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
         available = results[0];
         myRides = results[1];
       } on TimeoutException {
-        if (mounted) setState(() {
+        if (mounted && !silent) setState(() {
           _loading = false;
           _error = 'Demorou demais. Verifique a conexão e tente novamente.';
         });
@@ -104,11 +115,17 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
           _isOnline = isOnline;
           _loading = false;
         });
-        if (_isOnline) _startLocationUpdates();
+        if (_isOnline) {
+          _startLocationUpdates();
+          _startRefreshPolling();
+        } else {
+          _refreshTimer?.cancel();
+          _refreshTimer = null;
+        }
         PushService().ensureTokenRegistered();
       }
     } catch (e) {
-      if (mounted) setState(() {
+      if (mounted && !silent) setState(() {
         _loading = false;
         _error = e.toString().replaceFirst('Exception: ', '');
       });
@@ -150,6 +167,15 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
     _locationTimer = null;
   }
 
+  /// Polling para novas corridas quando online (atualiza a cada 8s).
+  void _startRefreshPolling() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!mounted || !_isOnline) return;
+      _load(silent: true);
+    });
+  }
+
   Future<void> _toggleOnline(bool value) async {
     if (_loadingStatus) return;
     setState(() => _loadingStatus = true);
@@ -164,10 +190,13 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
       if (mounted) {
         setState(() { _isOnline = true; _loadingStatus = false; });
         _startLocationUpdates();
+        _startRefreshPolling();
         PushService().ensureTokenRegistered();
       }
       } else {
         _stopLocationUpdates();
+        _refreshTimer?.cancel();
+        _refreshTimer = null;
         await _api.updateDriverStatus(isOnline: false);
         if (mounted) setState(() { _isOnline = false; _loadingStatus = false; });
       }
@@ -237,8 +266,9 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red),
+          SnackBar(content: Text(msg), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     }

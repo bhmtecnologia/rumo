@@ -59,7 +59,11 @@ export default function Mapa() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => load(), []);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const activeRides = rides.filter((r) =>
     ['requested', 'accepted', 'driver_arrived', 'in_progress'].includes(r.status)
