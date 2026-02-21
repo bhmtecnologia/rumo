@@ -24,7 +24,7 @@ class WaitingForDriverScreen extends StatefulWidget {
   State<WaitingForDriverScreen> createState() => _WaitingForDriverScreenState();
 }
 
-class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
+class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> with WidgetsBindingObserver {
   final ApiService _api = ApiService();
   late Ride _ride;
   Timer? _pollTimer;
@@ -34,13 +34,30 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ride = widget.ride;
     _startPolling();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted && !_ride.isFinished) {
+      _poll(); // Atualiza imediatamente ao voltar ao app
+    }
+  }
+
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _poll());
+    // Intervalo mais curto quando aguardando aceite
+    final interval = _ride.isRequested ? const Duration(seconds: 2) : const Duration(seconds: 3);
+    _pollTimer = Timer.periodic(interval, (_) => _poll());
   }
 
   Future<void> _poll() async {
@@ -48,7 +65,11 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
     try {
       final updated = await _api.getRide(_ride.id);
       if (!mounted) return;
+      final wasRequested = _ride.isRequested;
       setState(() => _ride = updated);
+      if (wasRequested && !updated.isRequested) {
+        _startPolling(); // Ajusta intervalo quando motorista aceita
+      }
       if (updated.status == 'completed') {
         _pollTimer?.cancel();
         final priceStr = updated.actualPriceCents != null
@@ -74,11 +95,6 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
     } catch (_) {}
   }
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
 
   Future<void> _cancelRide() async {
     final ok = await showDialog<bool>(
@@ -211,9 +227,13 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
                       ),
               ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
+              child: RefreshIndicator(
+                onRefresh: () async => _poll(),
+                color: const Color(0xFF00D95F),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
@@ -324,6 +344,7 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
                 ),
               ),
             ),
+          ),  // Expanded
           ],
         ),
       ),

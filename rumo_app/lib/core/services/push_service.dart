@@ -32,21 +32,26 @@ class PushService {
 
   static const _channelId = 'rumo_new_ride';
   static const _channelName = 'Nova corrida';
+  static const _passengerChannelId = 'rumo_driver_accepted';
+  static const _passengerChannelName = 'Motorista aceitou';
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  bool _forPassenger = false;
 
-  /// Inicializa FCM e local notifications. Chamar uma vez no main do motorista.
-  Future<void> init() async {
+  /// Inicializa FCM e local notifications.
+  /// [forPassenger] true = app passageiro (push quando motorista aceita), false = motorista (push nova corrida).
+  Future<void> init({bool forPassenger = false}) async {
     if (_initialized) return;
     if (!Platform.isAndroid) return; // iOS precisa de config adicional
 
     try {
+      _forPassenger = forPassenger;
       await Firebase.initializeApp();
-      await _setupLocalNotifications();
-      await _setupFcm();
+      await _setupLocalNotifications(forPassenger);
+      await _setupFcm(forPassenger);
       _initialized = true;
     } catch (e) {
       // Firebase não configurado (ex: falta google-services.json)
@@ -54,7 +59,7 @@ class PushService {
     }
   }
 
-  Future<void> _setupLocalNotifications() async {
+  Future<void> _setupLocalNotifications(bool forPassenger) async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: android);
     await _localNotifications.initialize(
@@ -62,10 +67,11 @@ class PushService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    const channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: 'Avisos de novas corridas disponíveis',
+    final id = forPassenger ? _passengerChannelId : _channelId;
+    final channel = AndroidNotificationChannel(
+      id,
+      forPassenger ? _passengerChannelName : _channelName,
+      description: forPassenger ? 'Aviso quando motorista aceita' : 'Avisos de novas corridas disponíveis',
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
@@ -82,7 +88,7 @@ class PushService {
     // Ao tocar na notificação, o app abre. A tela do motorista já mostra as corridas.
   }
 
-  Future<void> _setupFcm() async {
+  Future<void> _setupFcm(bool forPassenger) async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // Android 13+: pedir permissão de notificação em runtime
@@ -104,24 +110,29 @@ class PushService {
     }
 
     // Foreground: mostrar notificação local com som
-    FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+    FirebaseMessaging.onMessage.listen((m) => _onForegroundMessage(m, forPassenger));
 
-    await _registerToken();
-    FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registerToken());
+    await _registerToken(forPassenger);
+    FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registerToken(forPassenger));
   }
 
-  void _onForegroundMessage(RemoteMessage message) {
+  void _onForegroundMessage(RemoteMessage message, bool forPassenger) {
     final notif = message.notification;
     if (notif == null) return;
 
+    final channelId = forPassenger ? _passengerChannelId : _channelId;
+    final channelName = forPassenger ? _passengerChannelName : _channelName;
+    final title = notif.title ?? (forPassenger ? 'Motorista aceitou' : 'Nova corrida');
+    final body = notif.body ?? (forPassenger ? 'Acompanhe sua corrida' : 'Uma nova corrida está disponível.');
+
     _localNotifications.show(
       message.hashCode,
-      notif.title ?? 'Nova corrida',
-      notif.body ?? 'Uma nova corrida está disponível.',
-      const NotificationDetails(
+      title,
+      body,
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
+          channelId,
+          channelName,
           channelDescription: 'Avisos de novas corridas',
           importance: Importance.max,
           priority: Priority.max,
@@ -131,13 +142,18 @@ class PushService {
     );
   }
 
-  Future<void> _registerToken() async {
+  Future<void> _registerToken([bool? forPassenger]) async {
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null || !AuthService().isLoggedIn) return;
 
+    final isPassenger = forPassenger ?? _forPassenger;
     try {
-      await ApiService().registerFcmToken(token);
-      debugPrint('PushService: token FCM registrado no backend');
+      if (isPassenger) {
+        await ApiService().registerPassengerFcmToken(token);
+      } else {
+        await ApiService().registerFcmToken(token);
+      }
+      debugPrint('PushService: token FCM registrado (${isPassenger ? "passageiro" : "motorista"})');
     } catch (e) {
       debugPrint('PushService: falha ao registrar token: $e');
     }

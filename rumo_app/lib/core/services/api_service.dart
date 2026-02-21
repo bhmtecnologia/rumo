@@ -177,6 +177,17 @@ class ApiService {
     if (res.statusCode != 200) throw Exception(errorMessage(null, res, 'Erro ao registrar notificações'));
   }
 
+  /// Passageiro: registra token FCM para push quando motorista aceita.
+  Future<void> registerPassengerFcmToken(String token) async {
+    final res = await http.post(
+      Uri.parse('$_base/passenger/fcm-token'),
+      headers: _headers,
+      body: jsonEncode({'token': token}),
+    );
+    await _check401(res);
+    if (res.statusCode != 200) throw Exception(errorMessage(null, res, 'Erro ao registrar notificações'));
+  }
+
   /// Lista corridas. Motorista: [available] true = só status requested; false/omitido = minhas corridas.
   Future<List<RideListItem>> listRides({bool? available}) async {
     var uri = Uri.parse('$_base/rides');

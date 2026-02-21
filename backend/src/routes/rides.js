@@ -5,7 +5,7 @@ import { calculateFare, getDistanceAndDuration } from '../lib/fare.js';
 import { isGestorCentral, isGestorUnidade, isMotorista } from '../lib/auth.js';
 import { checkRestrictions } from '../lib/restrictions.js';
 import { logAudit } from '../lib/audit.js';
-import { sendNewRideNotificationToDrivers } from '../lib/push.js';
+import { sendNewRideNotificationToDrivers, sendDriverAcceptedNotificationToPassenger } from '../lib/push.js';
 
 const router = Router();
 
@@ -455,6 +455,21 @@ router.patch('/:id/accept', async (req, res) => {
         return res.status(404).json({ error: 'Corrida não encontrada ou já foi aceita.' });
       }
       await logAudit('ride_accepted', userId, 'ride', id, { vehiclePlate });
+      const requesterId = updated.requested_by_user_id;
+      if (requesterId) {
+        const { data: pt } = await getSupabase()
+          .from('passenger_fcm_tokens')
+          .select('token')
+          .eq('user_id', requesterId);
+        const passengerTokens = (pt || []).map((r) => r.token).filter(Boolean);
+        if (passengerTokens.length > 0) {
+          sendDriverAcceptedNotificationToPassenger(passengerTokens, {
+            id: updated.id,
+            driverName: userName,
+            vehiclePlate,
+          });
+        }
+      }
       return res.json(mapRideRow(updated));
     }
 
@@ -467,7 +482,20 @@ router.patch('/:id/accept', async (req, res) => {
       return res.status(404).json({ error: 'Corrida não encontrada ou já foi aceita.' });
     }
     await logAudit('ride_accepted', userId, 'ride', id, { vehiclePlate });
-    return res.json(mapRideRow(r.rows[0]));
+    const row = r.rows[0];
+    const requesterId = row.requested_by_user_id;
+    if (requesterId) {
+      const tr = await pool.query('SELECT token FROM passenger_fcm_tokens WHERE user_id = $1', [requesterId]);
+      const passengerTokens = tr.rows.map((r) => r.token).filter(Boolean);
+      if (passengerTokens.length > 0) {
+        sendDriverAcceptedNotificationToPassenger(passengerTokens, {
+          id: row.id,
+          driverName: userName,
+          vehiclePlate,
+        });
+      }
+    }
+    return res.json(mapRideRow(row));
   } catch (err) {
     console.error('Accept ride error:', err);
     return res.status(500).json({ error: 'Erro ao aceitar corrida' });

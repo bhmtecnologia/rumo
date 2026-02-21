@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
+import 'package:rumo_app/core/services/push_service.dart';
 
 import 'request_ride_screen.dart';
 import 'waiting_for_driver_screen.dart';
@@ -20,6 +23,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   RideListItem? _pendingRide;
   bool _pendingLoading = true;
   bool _cancelling = false;
+  Timer? _pendingPollTimer;
 
   static const _pendingStatuses = ['requested', 'accepted', 'driver_arrived', 'in_progress'];
 
@@ -27,6 +31,22 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   void initState() {
     super.initState();
     _loadPendingRide();
+    PushService().ensureTokenRegistered(); // Registra FCM para push quando motorista aceita
+  }
+
+  @override
+  void dispose() {
+    _pendingPollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPendingPolling() {
+    _pendingPollTimer?.cancel();
+    if (_pendingRide == null) return;
+    _pendingPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      _loadPendingRide();
+    });
   }
 
   Future<void> _loadPendingRide() async {
@@ -40,6 +60,11 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         _pendingRide = pending.isNotEmpty ? pending.first : null;
         _pendingLoading = false;
       });
+      if (_pendingRide != null) {
+        _startPendingPolling();
+      } else {
+        _pendingPollTimer?.cancel();
+      }
     } catch (_) {
       if (mounted) setState(() => _pendingLoading = false);
     }

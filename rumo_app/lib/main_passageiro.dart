@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'core/services/auth_service.dart';
+import 'core/services/push_service.dart';
 import 'modules/passageiro/screens/passageiro_home_screen.dart';
 import 'screens/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await PushService().init(forPassenger: true);
   runApp(const RumoPassageiroApp());
 }
 
