@@ -261,6 +261,15 @@ CREATE TABLE IF NOT EXISTS driver_availability (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_driver_availability_online ON driver_availability(is_online) WHERE is_online = true;
+
+-- Tokens FCM para push em motoristas (nova corrida)
+CREATE TABLE IF NOT EXISTS driver_fcm_tokens (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, token)
+);
+CREATE INDEX IF NOT EXISTS idx_driver_fcm_tokens_user ON driver_fcm_tokens(user_id);
 `;
 
 async function migrate() {

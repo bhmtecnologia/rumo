@@ -5,8 +5,31 @@ import { calculateFare, getDistanceAndDuration } from '../lib/fare.js';
 import { isGestorCentral, isGestorUnidade, isMotorista } from '../lib/auth.js';
 import { checkRestrictions } from '../lib/restrictions.js';
 import { logAudit } from '../lib/audit.js';
+import { sendNewRideNotificationToDrivers } from '../lib/push.js';
 
 const router = Router();
+
+async function getOnlineDriverFcmTokens() {
+  if (useSupabase()) {
+    const { data: online } = await getSupabase()
+      .from('driver_availability')
+      .select('user_id')
+      .eq('is_online', true);
+    const userIds = (online || []).map((r) => r.user_id);
+    if (userIds.length === 0) return [];
+    const { data: rows } = await getSupabase()
+      .from('driver_fcm_tokens')
+      .select('token')
+      .in('user_id', userIds);
+    return (rows || []).map((r) => r.token).filter(Boolean);
+  }
+  const r = await pool.query(
+    `SELECT t.token FROM driver_fcm_tokens t
+     JOIN driver_availability d ON d.user_id = t.user_id
+     WHERE d.is_online = true`
+  );
+  return r.rows.map((row) => row.token).filter(Boolean);
+}
 
 function mapRideRow(row) {
   const base = {
@@ -295,6 +318,21 @@ router.post('/', async (req, res) => {
       'pt-BR',
       { style: 'currency', currency: 'BRL' }
     );
+
+    // Push para motoristas online
+    try {
+      const tokens = await getOnlineDriverFcmTokens();
+      if (tokens.length > 0) {
+        await sendNewRideNotificationToDrivers(tokens, {
+          id: ride.id,
+          pickupAddress: ride.pickup_address,
+          destinationAddress: ride.destination_address,
+          formattedPrice,
+        });
+      }
+    } catch (pushErr) {
+      console.error('Push new ride error:', pushErr);
+    }
 
     return res.status(201).json({
       id: ride.id,

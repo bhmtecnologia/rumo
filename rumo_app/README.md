@@ -71,12 +71,37 @@ flutter build apk --dart-define=API_BASE_URL=https://sua-api.exemplo.com/api
 
 O backend precisa estar acessível nesse endereço (firewall, porta 3001 aberta ou HTTPS em produção).
 
+## Três apps separados (Passageiro, Motorista, Central)
+
+O projeto tem **3 flavors** que geram apps distintos (como Uber e Uber Driver):
+
+| App | Comando de build | Package ID | Nome |
+|-----|------------------|------------|------|
+| Passageiro | `flutter build apk --flavor passageiro -t lib/main_passageiro.dart` | com.rumo.passageiro | Rumo |
+| Motorista | `flutter build apk --flavor motorista -t lib/main_motorista.dart` | com.rumo.motorista | Rumo Parceiro |
+| Admin/Central | `flutter build apk --flavor admin -t lib/main_admin.dart` | com.rumo.admin | Rumo Central |
+
+Cada app redireciona automaticamente após o login:
+- **Passageiro**: apenas perfil `usuario`
+- **Motorista**: apenas perfil `motorista`
+- **Central**: apenas perfis `gestor_central` ou `gestor_unidade`
+
+Se o usuário logar com perfil incompatível, o app exibe mensagem e botão Sair.
+
 ## Rodar o app
 
 ```bash
 cd rumo_app
 flutter pub get
 flutter run
+```
+
+Para rodar um flavor específico:
+
+```bash
+flutter run --flavor passageiro -t lib/main_passageiro.dart
+flutter run --flavor motorista -t lib/main_motorista.dart
+flutter run --flavor admin -t lib/main_admin.dart
 ```
 
 ## Permissões

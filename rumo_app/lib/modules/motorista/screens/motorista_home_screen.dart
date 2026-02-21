@@ -7,6 +7,7 @@ import 'package:rumo_app/core/models/ride.dart';
 import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/auth_service.dart';
+import 'package:rumo_app/core/services/push_service.dart';
 
 import 'motorista_active_ride_screen.dart';
 
@@ -104,6 +105,7 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
           _loading = false;
         });
         if (_isOnline) _startLocationUpdates();
+        PushService().ensureTokenRegistered();
       }
     } catch (e) {
       if (mounted) setState(() {
@@ -159,10 +161,11 @@ class _MotoristaHomeScreenState extends State<MotoristaHomeScreen> {
           lat: pos?.latitude,
           lng: pos?.longitude,
         );
-        if (mounted) {
-          setState(() { _isOnline = true; _loadingStatus = false; });
-          _startLocationUpdates();
-        }
+      if (mounted) {
+        setState(() { _isOnline = true; _loadingStatus = false; });
+        _startLocationUpdates();
+        PushService().ensureTokenRegistered();
+      }
       } else {
         _stopLocationUpdates();
         await _api.updateDriverStatus(isOnline: false);

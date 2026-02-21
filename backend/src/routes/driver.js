@@ -12,6 +12,48 @@ import { logAudit } from '../lib/audit.js';
 const router = Router();
 
 /**
+ * POST /api/driver/fcm-token
+ * Body: { token: string }
+ * Motorista registra token FCM para receber push de nova corrida.
+ */
+router.post('/fcm-token', async (req, res) => {
+  try {
+    if (!isMotorista(req.user)) {
+      return res.status(403).json({ error: 'Apenas motoristas podem registrar token FCM.' });
+    }
+    const { token } = req.body ?? {};
+    if (!token || typeof token !== 'string' || token.length < 20) {
+      return res.status(400).json({ error: 'Token FCM inválido.' });
+    }
+    const userId = req.user.id;
+
+    if (useSupabase()) {
+      const { error } = await getSupabase()
+        .from('driver_fcm_tokens')
+        .upsert(
+          { user_id: userId, token: token.trim(), created_at: new Date().toISOString() },
+          { onConflict: 'user_id,token' }
+        );
+      if (error) {
+        console.error('Driver FCM token Supabase error:', error);
+        return res.status(500).json({ error: 'Erro ao registrar token' });
+      }
+    } else {
+      await pool.query(
+        `INSERT INTO driver_fcm_tokens (user_id, token, created_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id, token) DO UPDATE SET created_at = NOW()`,
+        [userId, token.trim()]
+      );
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Driver FCM token error:', err);
+    return res.status(500).json({ error: 'Erro ao registrar token' });
+  }
+});
+
+/**
  * GET /api/driver/status
  * Motorista: retorna { isOnline, lat, lng, updatedAt } do próprio registro.
  */

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -28,6 +29,26 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        resValue("string", "app_name", "Rumo")
+    }
+
+    flavorDimensions += "app"
+    productFlavors {
+        create("passageiro") {
+            dimension = "app"
+            applicationId = "com.rumo.passageiro"
+            resValue("string", "app_name", "Rumo")
+        }
+        create("motorista") {
+            dimension = "app"
+            applicationId = "com.rumo.motorista"
+            resValue("string", "app_name", "Rumo Parceiro")
+        }
+        create("admin") {
+            dimension = "app"
+            applicationId = "com.rumo.admin"
+            resValue("string", "app_name", "Rumo Central")
+        }
     }
 
     buildTypes {
