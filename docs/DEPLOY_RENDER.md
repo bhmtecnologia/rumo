@@ -41,6 +41,23 @@ Hoje só a **pasta web** (build do Flutter) está no Render, como **Static Site*
 
 ---
 
+## Static Site: apenas logo aparece (500 em main.dart.js)
+
+Se a página mostra só o logo e não carrega o app, o `main.dart.js` provavelmente está retornando 500.
+
+**1. Conferir no Render Dashboard (Static Site):**
+- **Root Directory:** `rumo_app`
+- **Build Command:** `flutter pub get && flutter build web -t lib/main_passageiro.dart -O 4 --pwa-strategy none`
+- **Publish Directory:** `build/web`
+
+**2. Testar no navegador:**
+- Abra `https://rumo-ddno.onrender.com/main.dart.js`
+- Se retornar 500, o Render não está servindo o arquivo corretamente
+
+**3. Se continuar 500:** tente hospedar o build em outro serviço (ex.: Cloudflare Pages, Vercel, Netlify) ou use um CDN para servir `main.dart.js`.
+
+---
+
 ## Resumo
 
 - **Static Site (frontend):** já está no ar em **https://rumo-ddno.onrender.com**.
