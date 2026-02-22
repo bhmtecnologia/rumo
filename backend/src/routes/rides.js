@@ -5,7 +5,7 @@ import { calculateFare, getDistanceAndDuration } from '../lib/fare.js';
 import { isGestorCentral, isGestorUnidade, isMotorista } from '../lib/auth.js';
 import { checkRestrictions } from '../lib/restrictions.js';
 import { logAudit } from '../lib/audit.js';
-import { sendNewRideNotificationToDrivers, sendDriverAcceptedNotificationToPassenger } from '../lib/push.js';
+import { sendNewRideNotificationToDrivers, sendDriverAcceptedNotificationToPassenger, sendDriverArrivedNotificationToPassenger } from '../lib/push.js';
 
 const router = Router();
 
@@ -56,7 +56,10 @@ function mapRideRow(row) {
   if (row.started_at != null) base.startedAt = row.started_at;
   if (row.completed_at != null) base.completedAt = row.completed_at;
   if (row.cancelled_at != null) base.cancelledAt = row.cancelled_at;
-  if (row.actual_price_cents != null) base.actualPriceCents = row.actual_price_cents;
+  if (row.actual_price_cents != null) {
+    base.actualPriceCents = row.actual_price_cents;
+    base.formattedPrice = (Number(row.actual_price_cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
   if (row.actual_distance_km != null) base.actualDistanceKm = parseFloat(row.actual_distance_km);
   if (row.actual_duration_min != null) base.actualDurationMin = row.actual_duration_min;
   if (row.rating != null) base.rating = row.rating;
@@ -353,6 +356,7 @@ const RIDE_LIST_COLS = `
   id, pickup_address, pickup_lat, pickup_lng,
   destination_address, destination_lat, destination_lng,
   estimated_distance_km, estimated_duration_min, estimated_price_cents,
+  actual_price_cents,
   status, created_at, driver_user_id, driver_name, vehicle_plate,
   accepted_at, driver_arrived_at, started_at, completed_at, cancelled_at,
   requested_by_user_id
@@ -538,6 +542,17 @@ router.patch('/:id/arrived', async (req, res) => {
         return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
       }
       await logAudit('ride_driver_arrived', userId, 'ride', id, {});
+      const requesterId = updated.requested_by_user_id;
+      if (requesterId) {
+        const { data: pt } = await getSupabase()
+          .from('passenger_fcm_tokens')
+          .select('token')
+          .eq('user_id', requesterId);
+        const passengerTokens = (pt || []).map((r) => r.token).filter(Boolean);
+        if (passengerTokens.length > 0) {
+          sendDriverArrivedNotificationToPassenger(passengerTokens, { id: updated.id, driverName: updated.driver_name });
+        }
+      }
       return res.json(mapRideRow(updated));
     }
 
@@ -549,8 +564,17 @@ router.patch('/:id/arrived', async (req, res) => {
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Corrida não encontrada ou você não é o motorista.' });
     }
+    const row = r.rows[0];
     await logAudit('ride_driver_arrived', req.user.id, 'ride', id, {});
-    return res.json(mapRideRow(r.rows[0]));
+    const requesterId = row.requested_by_user_id;
+    if (requesterId) {
+      const tr = await pool.query('SELECT token FROM passenger_fcm_tokens WHERE user_id = $1', [requesterId]);
+      const passengerTokens = tr.rows.map((r) => r.token).filter(Boolean);
+      if (passengerTokens.length > 0) {
+        sendDriverArrivedNotificationToPassenger(passengerTokens, { id: row.id, driverName: row.driver_name });
+      }
+    }
+    return res.json(mapRideRow(row));
   } catch (err) {
     console.error('Arrived error:', err);
     return res.status(500).json({ error: 'Erro ao registrar chegada' });
@@ -563,10 +587,43 @@ router.patch('/:id/arrived', async (req, res) => {
 router.patch('/:id/start', async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
+
+    if (useSupabase()) {
+      const { data: existing, error: fetchErr } = await getSupabase()
+        .from('rides')
+        .select('id, status, driver_user_id')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !existing) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      if (existing.driver_user_id !== userId || existing.status !== 'driver_arrived') {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      const { data: updated, error: updateErr } = await getSupabase()
+        .from('rides')
+        .update({
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('driver_user_id', userId)
+        .eq('status', 'driver_arrived')
+        .select()
+        .single();
+      if (updateErr || !updated) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      await logAudit('ride_started', userId, 'ride', id, {});
+      return res.json(mapRideRow(updated));
+    }
+
     const r = await pool.query(
       `UPDATE rides SET status = 'in_progress', started_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND driver_user_id = $2 AND status = 'driver_arrived' RETURNING *`,
-      [id, req.user.id]
+      [id, userId]
     );
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
@@ -589,11 +646,47 @@ router.patch('/:id/complete', async (req, res) => {
     if (actualPriceCents == null) {
       return res.status(400).json({ error: 'actualPriceCents é obrigatório.' });
     }
+    const userId = req.user.id;
+
+    if (useSupabase()) {
+      const { data: existing, error: fetchErr } = await getSupabase()
+        .from('rides')
+        .select('id, status, driver_user_id')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !existing) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      if (existing.driver_user_id !== userId || existing.status !== 'in_progress') {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      const { data: updated, error: updateErr } = await getSupabase()
+        .from('rides')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          actual_price_cents: actualPriceCents,
+          actual_distance_km: actualDistanceKm ?? null,
+          actual_duration_min: actualDurationMin ?? null,
+        })
+        .eq('id', id)
+        .eq('driver_user_id', userId)
+        .eq('status', 'in_progress')
+        .select()
+        .single();
+      if (updateErr || !updated) {
+        return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });
+      }
+      await logAudit('ride_completed', userId, 'ride', id, { actualPriceCents, actualDistanceKm, actualDurationMin });
+      return res.json(mapRideRow(updated));
+    }
+
     const r = await pool.query(
       `UPDATE rides SET status = 'completed', completed_at = NOW(), updated_at = NOW(),
         actual_price_cents = $1, actual_distance_km = $2, actual_duration_min = $3
        WHERE id = $4 AND driver_user_id = $5 AND status = 'in_progress' RETURNING *`,
-      [actualPriceCents, actualDistanceKm ?? null, actualDurationMin ?? null, id, req.user.id]
+      [actualPriceCents, actualDistanceKm ?? null, actualDurationMin ?? null, id, userId]
     );
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Corrida não encontrada ou status inválido.' });

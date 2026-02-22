@@ -6,6 +6,11 @@ import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/push_service.dart';
 
+import 'help_screen.dart';
+import 'schedule_ride_screen.dart';
+import 'passageiro_account_screen.dart';
+import 'passageiro_activity_screen.dart';
+import 'passageiro_options_screen.dart';
 import 'request_ride_screen.dart';
 import 'waiting_for_driver_screen.dart';
 
@@ -56,8 +61,49 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
       if (!mounted) return;
       final pending = list.where((r) => _pendingStatuses.contains(r.status)).toList();
       pending.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+
+      final seenDest = <String>{};
+      final seenOrig = <String>{};
+      final destinations = <_DestinationItem>[];
+      final origins = <_DestinationItem>[];
+      for (final r in list) {
+        if (destinations.length < 5) {
+          final addr = r.destinationAddress;
+          if (addr.isNotEmpty && !seenDest.contains(addr)) {
+            seenDest.add(addr);
+            final title = addr.length > 45 ? '${addr.substring(0, 45)}...' : addr;
+            destinations.add(_DestinationItem(
+              title,
+              addr,
+              Icons.history,
+              r.destinationLat,
+              r.destinationLng,
+            ));
+          }
+        }
+        if (origins.length < 5) {
+          final addr = r.pickupAddress;
+          if (addr.isNotEmpty && !seenOrig.contains(addr)) {
+            seenOrig.add(addr);
+            final title = addr.length > 45 ? '${addr.substring(0, 45)}...' : addr;
+            origins.add(_DestinationItem(
+              title,
+              addr,
+              Icons.trip_origin,
+              r.pickupLat,
+              r.pickupLng,
+            ));
+          }
+        }
+      }
+      if (destinations.isEmpty) {
+        destinations.addAll(_fallbackDestinations);
+      }
+
       setState(() {
         _pendingRide = pending.isNotEmpty ? pending.first : null;
+        _recentDestinations = destinations;
+        _recentOrigins = origins;
         if (!silent) _pendingLoading = false;
       });
       if (_pendingRide != null) {
@@ -66,7 +112,12 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         _pendingPollTimer?.cancel();
       }
     } catch (_) {
-      if (mounted && !silent) setState(() => _pendingLoading = false);
+      if (mounted) {
+        setState(() {
+          if (_recentDestinations.isEmpty) _recentDestinations = List.from(_fallbackDestinations);
+          if (!silent) _pendingLoading = false;
+        });
+      }
     }
   }
 
@@ -125,22 +176,116 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
     }
   }
 
-  static const _recentDestinations = [
-    _DestinationItem('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF', Icons.access_time),
-    _DestinationItem('Aeroporto Internacional de Brasília - Presidente Juscelino Kubitschek', 'Lago Sul, Brasília - DF', Icons.flight),
+  List<_DestinationItem> _recentDestinations = List.from(_fallbackDestinations);
+  List<_DestinationItem> _recentOrigins = [];
+  static const _fallbackDestinations = [
+    _DestinationItem('Sqs 303 - Bloco H', 'SHCS SQS 303 - Asa Sul, Brasília - DF', Icons.access_time, null, null),
+    _DestinationItem('Aeroporto Internacional de Brasília', 'Lago Sul, Brasília - DF', Icons.flight, null, null),
   ];
 
   static const _sugestoesCards = [
-    _SugestaoCard('Viagem', Icons.directions_car),
-    _SugestaoCard('Enviar itens', Icons.inventory_2_outlined),
-    _SugestaoCard('Reserve', Icons.calendar_today_outlined),
-    _SugestaoCard('Teens', Icons.person_outline),
+    _SugestaoCard('Viagem', Icons.directions_car, true),
   ];
 
-  void _openRequestRide() {
+  void _openRequestRide({_DestinationItem? destination, _DestinationItem? origin}) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const RequestRideScreen()),
+      MaterialPageRoute(
+        builder: (_) => RequestRideScreen(
+          initialDestinationAddress: destination?.subtitle,
+          initialDestinationLat: destination?.lat,
+          initialDestinationLng: destination?.lng,
+          initialPickupAddress: origin?.subtitle,
+          initialPickupLat: origin?.lat,
+          initialPickupLng: origin?.lng,
+        ),
+      ),
     ).then((_) => _loadPendingRide());
+  }
+
+  Widget _buildOriginTile(_DestinationItem d) {
+    return InkWell(
+      onTap: () => _openRequestRide(origin: d),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            Icon(d.icon, color: Colors.grey[400], size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    d.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    d.subtitle,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeContent() {
+    return RefreshIndicator(
+      onRefresh: _loadPendingRide,
+      color: const Color(0xFF00D95F),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            if (!_pendingLoading && _pendingRide != null) _buildPendingRideBanner(),
+            if (!_pendingLoading && _pendingRide != null) const SizedBox(height: 12),
+            _buildSearchBar(),
+            const SizedBox(height: 24),
+            if (_recentOrigins.isNotEmpty) ...[
+              Text(
+                'Origens recentes',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Colors.grey[400],
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              ..._recentOrigins.map((d) => _buildOriginTile(d)),
+              const SizedBox(height: 16),
+            ],
+            Text(
+              'Destinos recentes',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            ..._recentDestinations.map((d) => _buildDestinationTile(d)),
+            const SizedBox(height: 24),
+            _buildSugestoesSection(),
+            const SizedBox(height: 24),
+            _buildMaisFormasCard(),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -151,31 +296,16 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(),
+            if (_currentIndex == 0) _buildHeader(),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadPendingRide,
-                color: const Color(0xFF00D95F),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 8),
-                      if (!_pendingLoading && _pendingRide != null) _buildPendingRideBanner(),
-                      if (!_pendingLoading && _pendingRide != null) const SizedBox(height: 12),
-                      _buildSearchBar(),
-                      const SizedBox(height: 24),
-                      ..._recentDestinations.map((d) => _buildDestinationTile(d)),
-                      const SizedBox(height: 24),
-                      _buildSugestoesSection(),
-                      const SizedBox(height: 24),
-                      _buildMaisFormasCard(),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  _buildHomeContent(),
+                  const PassageiroOptionsScreen(),
+                  const PassageiroActivityScreen(),
+                  const PassageiroAccountScreen(),
+                ],
               ),
             ),
             _buildBottomNav(),
@@ -314,9 +444,9 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         const SizedBox(width: 12),
         OutlinedButton.icon(
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Agendar viagem em breve')),
-            );
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ScheduleRideScreen()),
+            ).then((_) => _loadPendingRide());
           },
           icon: const Icon(Icons.calendar_today, size: 18),
           label: const Text('Mais tarde'),
@@ -332,7 +462,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
 
   Widget _buildDestinationTile(_DestinationItem d) {
     return InkWell(
-      onTap: _openRequestRide,
+      onTap: () => _openRequestRide(destination: d),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Row(
@@ -389,17 +519,14 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
         const SizedBox(height: 12),
         Row(
           children: _sugestoesCards.map((s) {
-            final isViagem = s.label == 'Viagem';
             return Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Material(
                   color: const Color(0xFF2C2C2C),
                   borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    onTap: () {
-                      if (isViagem) _openRequestRide();
-                    },
+                    child: InkWell(
+                    onTap: s.enabled ? () => _openRequestRide() : null,
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -407,7 +534,7 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
                         children: [
                           Icon(
                             s.icon,
-                            color: isViagem ? const Color(0xFF00D95F) : Colors.grey[400],
+                            color: s.enabled ? const Color(0xFF00D95F) : Colors.grey[400],
                             size: 28,
                           ),
                           const SizedBox(height: 8),
@@ -437,23 +564,52 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Mais formas de usar o app',
+          'Ajuda',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),
         ),
         const SizedBox(height: 12),
-        Container(
-          height: 140,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2C2C2C),
+        Material(
+          color: const Color(0xFF2C2C2C),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HelpScreen()),
+              );
+            },
             borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              'Em breve',
-              style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Icon(Icons.help_outline, color: const Color(0xFF00D95F), size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Perguntas frequentes',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tire dúvidas sobre o uso do app',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey[500]),
+                ],
+              ),
             ),
           ),
         ),
@@ -517,11 +673,14 @@ class _DestinationItem {
   final String title;
   final String subtitle;
   final IconData icon;
-  const _DestinationItem(this.title, this.subtitle, this.icon);
+  final double? lat;
+  final double? lng;
+  const _DestinationItem(this.title, this.subtitle, this.icon, this.lat, this.lng);
 }
 
 class _SugestaoCard {
   final String label;
   final IconData icon;
-  const _SugestaoCard(this.label, this.icon);
+  final bool enabled;
+  const _SugestaoCard(this.label, this.icon, [this.enabled = true]);
 }

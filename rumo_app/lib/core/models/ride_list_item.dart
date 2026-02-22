@@ -11,6 +11,7 @@ class RideListItem {
   final double? estimatedDistanceKm;
   final int? estimatedDurationMin;
   final int estimatedPriceCents;
+  final int? actualPriceCents;
   final String formattedPrice;
   final DateTime? createdAt;
   final String? driverName;
@@ -28,6 +29,7 @@ class RideListItem {
     this.estimatedDistanceKm,
     this.estimatedDurationMin,
     required this.estimatedPriceCents,
+    this.actualPriceCents,
     required this.formattedPrice,
     this.createdAt,
     this.driverName,
@@ -47,6 +49,7 @@ class RideListItem {
       estimatedDistanceKm: _toDouble(json['estimatedDistanceKm'] ?? json['estimated_distance_km']),
       estimatedDurationMin: json['estimatedDurationMin'] as int? ?? json['estimated_duration_min'] as int?,
       estimatedPriceCents: json['estimatedPriceCents'] as int? ?? json['estimated_price_cents'] as int? ?? 0,
+      actualPriceCents: json['actualPriceCents'] as int? ?? json['actual_price_cents'] as int?,
       formattedPrice: (json['formattedPrice'] ?? '') as String,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/modules/passageiro/screens/passageiro_home_screen.dart';
+import 'package:rumo_app/modules/passageiro/screens/ride_receipt_screen.dart';
 
 /// Tela de avaliação (1-5 estrelas) após corrida concluída.
 class RideRatingScreen extends StatefulWidget {
@@ -27,10 +28,38 @@ class _RideRatingScreenState extends State<RideRatingScreen> {
       await _api.rateRide(widget.rideId, _rating);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Obrigado pela avaliação!')));
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const PassageiroHomeScreen()),
-        (route) => false,
+      if (!mounted) return;
+      final goReceipt = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Avaliação enviada'),
+          content: const Text('Deseja ver o recibo da corrida?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Voltar ao início'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ver recibo'),
+            ),
+          ],
+        ),
       );
+      if (!mounted) return;
+      if (goReceipt == true) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => RideReceiptScreen(rideId: widget.rideId),
+          ),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const PassageiroHomeScreen()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (mounted) setState(() {
         _submitting = false;

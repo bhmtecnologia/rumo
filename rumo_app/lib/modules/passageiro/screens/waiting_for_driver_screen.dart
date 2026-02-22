@@ -7,6 +7,7 @@ import 'package:rumo_app/core/models/ride.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/widgets/rumo_map.dart';
 import 'package:rumo_app/modules/passageiro/screens/passageiro_home_screen.dart';
+import 'package:rumo_app/modules/passageiro/screens/ride_chat_screen.dart';
 import 'package:rumo_app/modules/passageiro/screens/ride_rating_screen.dart';
 
 /// Tela de acompanhamento estilo Uber: mapa, posição do motorista, card, ETA.
@@ -132,8 +133,10 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> with Wi
   }
 
   void _onMessageTap() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Chat com o motorista em breve.')),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RideChatScreen(rideId: _ride.id),
+      ),
     );
   }
 
@@ -245,7 +248,9 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> with Wi
                     Text(
                       _ride.isRequested
                           ? 'Assim que um motorista aceitar, você será avisado.'
-                          : 'Acompanhe o status da sua viagem.',
+                          : _ride.isDriverArrived
+                              ? 'O motorista está te esperando. Pode embarcar!'
+                              : 'Acompanhe o status da sua viagem.',
                       style: TextStyle(fontSize: 15, color: Colors.grey[400]),
                       textAlign: TextAlign.center,
                     ),
@@ -255,6 +260,7 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> with Wi
                         driverName: _ride.driverName ?? 'Motorista',
                         vehiclePlate: _ride.vehiclePlate,
                         etaMin: _ride.etaMin,
+                        driverArrived: _ride.isDriverArrived,
                         onMessageTap: _onMessageTap,
                       ),
                     ],
@@ -356,12 +362,14 @@ class _DriverCard extends StatelessWidget {
   final String driverName;
   final String? vehiclePlate;
   final int? etaMin;
+  final bool driverArrived;
   final VoidCallback onMessageTap;
 
   const _DriverCard({
     required this.driverName,
     this.vehiclePlate,
     this.etaMin,
+    this.driverArrived = false,
     required this.onMessageTap,
   });
 
@@ -393,7 +401,21 @@ class _DriverCard extends StatelessWidget {
                 Text(driverName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                 if (vehiclePlate != null && vehiclePlate!.isNotEmpty)
                   Text(vehiclePlate!, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
-                if (etaMin != null && etaMin! > 0)
+                if (driverArrived)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 14, color: Colors.green[400]),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Motorista na origem',
+                          style: TextStyle(fontSize: 13, color: Colors.green[400], fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (etaMin != null && etaMin! > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Row(

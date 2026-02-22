@@ -9,6 +9,7 @@ import 'package:rumo_app/core/models/cost_center.dart';
 import 'package:rumo_app/core/models/ride_list_item.dart';
 import 'package:rumo_app/core/services/api_service.dart';
 import 'package:rumo_app/core/services/auth_service.dart';
+import 'package:rumo_app/core/services/passenger_preferences_service.dart';
 import 'package:rumo_app/core/services/nominatim_service.dart';
 
 import 'define_location_screen.dart';
@@ -16,7 +17,24 @@ import 'trip_choice_screen.dart';
 import 'waiting_for_driver_screen.dart';
 
 class RequestRideScreen extends StatefulWidget {
-  const RequestRideScreen({super.key});
+  final String? initialDestinationAddress;
+  final double? initialDestinationLat;
+  final double? initialDestinationLng;
+  final String? initialPickupAddress;
+  final double? initialPickupLat;
+  final double? initialPickupLng;
+  final DateTime? scheduledAt;
+
+  const RequestRideScreen({
+    super.key,
+    this.initialDestinationAddress,
+    this.initialDestinationLat,
+    this.initialDestinationLng,
+    this.initialPickupAddress,
+    this.initialPickupLat,
+    this.initialPickupLng,
+    this.scheduledAt,
+  });
 
   @override
   State<RequestRideScreen> createState() => _RequestRideScreenState();
@@ -55,6 +73,19 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDestinationAddress != null && widget.initialDestinationAddress!.isNotEmpty) {
+      _destinationAddress = widget.initialDestinationAddress!;
+      _destinationController.text = widget.initialDestinationAddress!;
+      if (widget.initialDestinationLat != null && widget.initialDestinationLng != null) {
+        _destinationCoords = LatLng(widget.initialDestinationLat!, widget.initialDestinationLng!);
+      }
+    }
+    if (widget.initialPickupAddress != null && widget.initialPickupAddress!.isNotEmpty) {
+      _pickupAddress = widget.initialPickupAddress!;
+      if (widget.initialPickupLat != null && widget.initialPickupLng != null) {
+        _pickupCoords = LatLng(widget.initialPickupLat!, widget.initialPickupLng!);
+      }
+    }
     _getLocation();
     _loadUserCostCenters();
     _loadPendingRide();
@@ -138,10 +169,14 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
       final list = await _api.listCostCenters();
       if (!mounted) return;
       final filtered = list.where((c) => ids.contains(c.id)).toList();
+      final defaultId = await PassengerPreferencesService().getDefaultCostCenterId();
+      final initialId = defaultId != null && ids.contains(defaultId)
+          ? defaultId
+          : (filtered.isNotEmpty ? filtered.first.id : null);
       setState(() {
         _userCostCenters = filtered;
         if (_selectedCostCenterId == null && filtered.isNotEmpty) {
-          _selectedCostCenterId = filtered.first.id;
+          _selectedCostCenterId = initialId ?? filtered.first.id;
         }
       });
     } catch (_) {}
@@ -179,12 +214,14 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
       final latLng = LatLng(pos.latitude, pos.longitude);
-      final address =
-          await _nominatim.reverseGeocode(pos.latitude, pos.longitude);
+      var address = await _nominatim.reverseGeocode(pos.latitude, pos.longitude);
+      if (address == null || address.trim().isEmpty) {
+        address = '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
+      }
       if (mounted) {
         setState(() {
           _pickupCoords = latLng;
-          _pickupAddress = address ?? 'Minha localização';
+          _pickupAddress = address;
           _locationLoading = false;
           _locationError = null;
         });

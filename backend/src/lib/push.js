@@ -129,3 +129,42 @@ export async function sendDriverAcceptedNotificationToPassenger(tokens, ride) {
     console.error('FCM passageiro error:', err.message);
   }
 }
+
+/**
+ * Envia push para o passageiro quando motorista chega na origem.
+ * @param {string[]} tokens - Tokens FCM do passageiro
+ * @param {object} ride - { id, driverName }
+ */
+export async function sendDriverArrivedNotificationToPassenger(tokens, ride) {
+  if (!tokens?.length) return;
+  const messaging = await getMessaging();
+  if (!messaging) return;
+  try {
+    const body = ride.driverName
+      ? `${ride.driverName} chegou no ponto de embarque. Pode embarcar!`
+      : 'O motorista chegou no ponto de embarque. Pode embarcar!';
+    const message = {
+      notification: {
+        title: 'Motorista chegou!',
+        body,
+      },
+      data: {
+        type: 'driver_arrived',
+        rideId: String(ride.id),
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'rumo_driver_accepted',
+          sound: 'default',
+          priority: 'max',
+        },
+      },
+      tokens,
+    };
+    const result = await messaging.sendEachForMulticast(message);
+    console.log('[push] FCM passageiro (arrived):', result.successCount, 'ok,', result.failureCount, 'falhas');
+  } catch (err) {
+    console.error('FCM passageiro arrived error:', err.message);
+  }
+}

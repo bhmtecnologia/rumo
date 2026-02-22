@@ -112,11 +112,12 @@ class AuthService {
     return user != null;
   }
 
-  /// Encerra sessão.
+  /// Encerra sessão. Chama [onUnauthorized] se definido, para a UI atualizar (ex.: voltar ao login).
   Future<void> logout() async {
     _token = null;
     _user = null;
     await _saveToStorage();
+    onUnauthorized?.call();
   }
 
   /// Alterar senha (usuário já logado).
