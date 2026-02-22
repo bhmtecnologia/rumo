@@ -215,13 +215,13 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
       );
       final latLng = LatLng(pos.latitude, pos.longitude);
       var address = await _nominatim.reverseGeocode(pos.latitude, pos.longitude);
-      if (address == null || address.trim().isEmpty) {
-        address = '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
-      }
+      final pickupAddr = (address != null && address.trim().isNotEmpty)
+          ? address
+          : '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
       if (mounted) {
         setState(() {
           _pickupCoords = latLng;
-          _pickupAddress = address;
+          _pickupAddress = pickupAddr;
           _locationLoading = false;
           _locationError = null;
         });
