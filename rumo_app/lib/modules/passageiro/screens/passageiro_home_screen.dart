@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:rumo_app/core/models/ride_list_item.dart';
@@ -48,7 +49,9 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
   void _startPendingPolling() {
     _pendingPollTimer?.cancel();
     if (_pendingRide == null) return;
-    _pendingPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // Web não recebe push; usa polling mais curto para atualizar quando motorista aceita
+    final interval = kIsWeb ? const Duration(seconds: 5) : const Duration(seconds: 15);
+    _pendingPollTimer = Timer.periodic(interval, (_) {
       if (!mounted) return;
       _loadPendingRide(silent: true);
     });
@@ -379,11 +382,11 @@ class _PassageiroHomeScreenState extends State<PassageiroHomeScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
+                FilledButton.icon(
                   onPressed: _openWaitingScreen,
-                  icon: const Icon(Icons.visibility, size: 18),
-                  label: const Text('Acompanhar'),
-                  style: ElevatedButton.styleFrom(
+                  icon: const Icon(Icons.visibility, size: 18, color: Colors.white),
+                  label: const Text('Acompanhar', style: TextStyle(color: Colors.white)),
+                  style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF00D95F),
                     foregroundColor: Colors.white,
                   ),

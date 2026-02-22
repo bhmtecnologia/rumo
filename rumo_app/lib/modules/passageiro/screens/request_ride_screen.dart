@@ -439,11 +439,14 @@ class _RequestRideScreenState extends State<RequestRideScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
+                FilledButton.icon(
                   onPressed: _openWaitingScreen,
-                  icon: const Icon(Icons.visibility, size: 18),
-                  label: const Text('Acompanhar'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D95F)),
+                  icon: const Icon(Icons.visibility, size: 18, color: Colors.white),
+                  label: const Text('Acompanhar', style: TextStyle(color: Colors.white)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF00D95F),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),

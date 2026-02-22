@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -84,6 +85,17 @@ class _RumoMapState extends State<RumoMap> {
         maxZoom: 14,
       ),
     );
+    // Web: forçar refresh dos tiles (bug flutter_map #1813)
+    if (kIsWeb) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 0.001);
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (!mounted) return;
+          _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 0.001);
+        });
+      });
+    }
   }
 
   @override
@@ -110,8 +122,12 @@ class _RumoMapState extends State<RumoMap> {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              // OSM bloqueia web por User-Agent; Carto funciona em web sem custom headers
+              urlTemplate: kIsWeb
+                  ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
+                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.rumo.rumo_app',
+              subdomains: kIsWeb ? ['a', 'b', 'c', 'd'] : ['a', 'b', 'c'],
             ),
             if (_routePoints.length >= 2)
               PolylineLayer(
