@@ -30,10 +30,9 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
-# Permitir build web para deploy (ex.: Render Static Site)
+# Ignora build exceto web (Render precisa do build web)
+/build/*
 !/build/web/
-!/build/web/**
 /coverage/
 
 # Symbolication related

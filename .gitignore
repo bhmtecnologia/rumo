@@ -11,9 +11,10 @@ tmp/
 
 # Build / output
 dist/
-build/
 tsconfig.tsbuildinfo
-# Flutter web build para deploy (ex.: Render)
+# Ignora build em geral, exceto Flutter web para Render
+build/
+!rumo_app/build/
 !rumo_app/build/web/
 !rumo_app/build/web/**
 *.log
